@@ -8,6 +8,13 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [userName, setUserName] = useState('')
+  const [userId, setUserId] = useState('')
+  const [classId, setClassId] = useState<number|null>(null)
+  const [className, setClassName] = useState('')
+  const [showJoinModal, setShowJoinModal] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [joinError, setJoinError] = useState('')
+  const [joining, setJoining] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -16,10 +23,19 @@ export default function StudentDashboard() {
   const loadData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
+    setUserId(session.user.id)
 
     const { data: userData } = await supabase
-      .from('users').select('name').eq('id', session.user.id).single()
-    if (userData) setUserName(userData.name)
+      .from('users').select('name, class_id').eq('id', session.user.id).single()
+    if (userData) {
+      setUserName(userData.name)
+      setClassId(userData.class_id)
+      if (userData.class_id) {
+        const { data: classData } = await supabase
+          .from('classes').select('name').eq('id', userData.class_id).single()
+        if (classData) setClassName(classData.name)
+      }
+    }
 
     const { data: pointsData } = await supabase
       .from('points').select('*').eq('user_id', session.user.id)
@@ -31,6 +47,28 @@ export default function StudentDashboard() {
       setHistory(pointsData)
     }
     setLoading(false)
+  }
+
+  const handleJoinClass = async () => {
+    setJoinError('')
+    if (!joinCode.trim()) return
+    setJoining(true)
+
+    const { data: foundClass } = await supabase
+      .from('classes').select('id, name').eq('join_code', joinCode.trim().toUpperCase()).single()
+
+    if (!foundClass) {
+      setJoinError('رمز الفصل غير صحيح. تحقق منه مع أستاذك')
+      setJoining(false)
+      return
+    }
+
+    await supabase.from('users').update({ class_id: foundClass.id }).eq('id', userId)
+    setClassId(foundClass.id)
+    setClassName(foundClass.name)
+    setShowJoinModal(false)
+    setJoinCode('')
+    setJoining(false)
   }
 
   const levels = [
@@ -75,12 +113,52 @@ export default function StudentDashboard() {
 
   return (
     <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial"}}>
+
+      {showJoinModal && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
+          <div style={{background:"white",borderRadius:"20px",padding:"32px",width:"360px",textAlign:"center"}}>
+            <div style={{fontSize:"48px",marginBottom:"12px"}}>🏫</div>
+            <h3 style={{color:"#1e3a8a",fontSize:"20px",fontWeight:"bold",marginBottom:"8px"}}>الانضمام إلى فصل</h3>
+            <p style={{color:"#6b7280",fontSize:"14px",marginBottom:"20px"}}>أدخل الرمز الذي أعطاك إياه أستاذك</p>
+
+            {joinError && (
+              <div style={{background:"#fee2e2",color:"#ef4444",padding:"10px",borderRadius:"8px",marginBottom:"16px",fontSize:"13px"}}>
+                {joinError}
+              </div>
+            )}
+
+            <input
+              type="text"
+              placeholder="مثال: A3X9K2"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              maxLength={6}
+              style={{width:"100%",padding:"14px",borderRadius:"10px",border:"2px solid #e5e7eb",marginBottom:"20px",fontSize:"20px",boxSizing:"border-box",textAlign:"center",fontWeight:"bold",letterSpacing:"4px"}}
+            />
+
+            <div style={{display:"flex",gap:"10px"}}>
+              <button onClick={handleJoinClass} disabled={joining || !joinCode.trim()}
+                style={{flex:1,background:"#2563eb",color:"white",border:"none",padding:"12px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"15px",opacity: joinCode.trim() ? 1 : 0.5}}>
+                {joining ? "..." : "انضمام ✓"}
+              </button>
+              <button onClick={()=>{setShowJoinModal(false);setJoinError('');setJoinCode('')}}
+                style={{flex:1,background:"#f3f4f6",color:"#6b7280",border:"none",padding:"12px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"15px"}}>
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
         <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة التلميذ</h1>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 16px",borderRadius:"20px",fontWeight:"bold"}}>
             ⭐ {points} نقطة
           </span>
+          <a href="/dashboard/leaderboard" style={{background:"#fef9c3",color:"#ca8a04",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            🏆 لوحة الصدارة
+          </a>
           <a href="/levels/primary" style={{background:"#dbeafe",color:"#2563eb",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             الدروس
           </a>
@@ -91,6 +169,32 @@ export default function StudentDashboard() {
       </nav>
 
       <div style={{maxWidth:"1100px",margin:"0 auto",padding:"24px"}}>
+
+        {/* قسم الفصل */}
+        <div style={{background:"white",borderRadius:"14px",padding:"16px 20px",marginBottom:"20px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+          {classId ? (
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <span style={{fontSize:"22px"}}>🏫</span>
+                <div>
+                  <p style={{margin:0,fontSize:"13px",color:"#9ca3af"}}>فصلي</p>
+                  <p style={{margin:0,fontWeight:"bold",color:"#1e293b"}}>{className}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <span style={{fontSize:"22px"}}>🏫</span>
+                <p style={{margin:0,color:"#9ca3af",fontSize:"14px"}}>لم تنضم لأي فصل بعد</p>
+              </div>
+              <button onClick={()=>setShowJoinModal(true)}
+                style={{background:"#2563eb",color:"white",border:"none",padding:"8px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"bold",fontSize:"13px"}}>
+                + الانضمام إلى فصل
+              </button>
+            </>
+          )}
+        </div>
 
         <div style={{background:`linear-gradient(135deg, ${currentLevel.color}, #1e3a8a)`,borderRadius:"16px",padding:"24px",marginBottom:"24px",color:"white"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
