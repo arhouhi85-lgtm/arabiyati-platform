@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { readingTexts, ReadingText } from '@/lib/readingTexts'
 
 const subjectBadges: {[key:string]:{name:string,icon:string,color:string,min:number}} = {
   "1":{name:"قارئ متميز",icon:"📖",color:"#2563eb",min:50},
@@ -12,114 +13,10 @@ const subjectBadges: {[key:string]:{name:string,icon:string,color:string,min:num
   "6":{name:"أستاذ اللغة",icon:"👑",color:"#f97316",min:50},
 }
 
-const AUDIO_START = 200
-const AUDIO_END = 344
-const AUDIO_DURATION = AUDIO_END - AUDIO_START
-
-const paragraphs = [
-  { num: 1, text: "كَانَ أَبِي فِي غُرْفَةِ الْجُلُوسِ حِينَ نَادَانِي قَائِلاً: «اِجْلِسِي يَا زَيْنَبُ بِقُرْبِي، وَتَابِعِي الْمَشَاهِدَ الَّتِي تَتَوَالَى عَلَى شَاشَةِ التِّلْفَازِ، وَأَنْصِتِي جَيِّداً لِمَا يَقُولُهُ الْمُذِيعُ.» كَانَتْ مَشَاهِدُ لِمَآثِرِ بِلادِي تَتَنَاوَبُ عَلَى الظُّهُورِ، وَالْمُذِيعُ يُعَلِّقُ وَيَقُولُ: «تَعْتَزُّ كُلُّ أُمَّةٍ بِمَآثِرِ أَجْدَادِهَا، تَصُونُهَا مِنَ التَّلَفِ وَتَحْفَظُهَا مِنَ الْعَبَثِ، وَتَعْرِضُهَا أَمَامَ الزُّوَّارِ مِنْ أَبْنَائِهَا لِيُشَاهِدُوا فِيهَا صُوَراً لِحَيَاةِ أَجْدَادِهِمْ، وَرُمُوزاً لِمَجْدِهِمْ وَحَضَارَتِهِمْ، وَدَلِيلاً نَاطِقاً بِعَظَمَتِهِمْ، وَلِتَكُونَ لِسَانَ حَالِهِمُ الَّذِي يُرَدِّدُ مَعَ الشَّاعِرِ:", start: 0, end: 0.28 },
-  { num: "شعر", text: "تِلْكَ آثَارُنَا تَدُلُّ عَلَيْنَا — فَانْظُرُوا بَعْدَنَا إِلَى الآثَارِ", start: 0.28, end: 0.33, isPoem: true },
-  { num: 2, text: "الْمَغْرِبُ مَلِيءٌ بِآثَارِ عِزِّهِ وَعَظَمَتِهِ، فَحَيْثُمَا وَلَّيْتَ وَجْهَكَ، وَجَدْتَ أَثَراً نَاطِقاً، وَفَنّاً خَالِداً، وَبُنْيَاناً شَامِخاً، يَشْهَدُ عَلَى ازْدِهَارِ حَضَارَةِ أَبْنَائِهِ، وَيَدُلُّ عَلَى مَبْلَغِ رُقِيِّهِمْ وَتَقَدُّمِهِمْ. فَإِذَا جُلْتَ فِي فَاسَ، وَقَصَدْتَ جَامِعَ الْقَرَوِيِّينَ بِهَا، أَوْ مَدْرَسَةَ «أَبِي عِنَانٍ»، أَوْ ضَرِيحَ مُؤَسِّسِ الْمَدِينَةِ الْمَوْلَى إِدْرِيسَ الأَزْهَرَ، فَسَتُشَاهِدُ الْفَنَّ فِي أَرْوَعِ صُوَرِهِ، وَتَقِفُ مُنْدَهِشاً أَمَامَ إِتْقَانِهِ وَمَهَارَةِ مُنْشِئِيهِ.", start: 0.33, end: 0.58 },
-  { num: 3, text: "وَإِذَا دَخَلْتَ إِلَى قُصُورِ مَكْنَاسَ وَمَسَاجِدِهَا، أَوْ شَاهَدْتَ فِي مُرَّاكُشَ الْحَمْرَاءِ صَوْمَعَةَ الْكُتُبِيَّةِ وَقَصْرَ الْبَدِيعِ وَصِهْرِيجَ الْمَنَارَةِ، فَسَتَجِدُ فِيهَا مَا يَرْفَعُ رَأْسَكَ، وَيُحَفِّزُكَ عَلَى الاقْتِدَاءِ بِسِيرَةِ أُولَئِكَ الأَجْدَادِ الْعُظَمَاءِ. وَإِذَا انْتَقَلْتَ إِلَى الرِّبَاطِ، فَسَتَنْدَهِشُ وَأَنْتَ تَنْظُرُ إِلَى صَوْمَعَةِ حَسَّانَ الْمُنْتَصِبَةِ جَانِبَ ضَرِيحِ مُحَمَّدٍ الْخَامِسِ، يَشْهَدَانِ عَلَى مَجْدِ بَلَدِكَ وَعَظَمَتِهِ فِي الْمَاضِي وَالْحَاضِرِ. وَفِي الْعَاصِمَةِ الاقْتِصَادِيَّةِ الدَّارِ الْبَيْضَاءِ، سَتَتَوَقَّفُ طَوِيلاً أَمَامَ رَوْعَةِ مَسْجِدِ الْحَسَنِ الثَّانِي الَّذِي تُدَاعِبُهُ أَمْوَاجُ الْبَحْرِ، وَسَتَنْبَهِرُ بِزَخَارِفِهِ وَفُسَيْفِسَائِهِ، وَالْخَزَفِ الْمُلَوَّنِ عَلَى سَوَارِيهِ وَجُدْرَانِهِ، وَنُقُوشِهِ الْبَدِيعَةِ عَلَى الْجِبْسِ وَالْخَشَبِ.»", start: 0.58, end: 0.88 },
-  { num: 4, text: "كُنْتُ أَوَدُّ أَنْ يَطُولَ الْبَرْنَامَجُ التِّلْفَازِيُّ، لأَنَّهُ شَيِّقٌ وَمُفِيدٌ، لَكِنْ سَرْعَانَ مَا قَالَ الْمُذِيعُ: «إِلَى اللِّقَاءِ فِي حَلْقَةٍ قَادِمَةٍ مَعَ مَآثِرَ أُخْرَى مِنْ بِلادِي.» — الْمُؤَلِّفُونَ", start: 0.88, end: 1 }
-]
-
-// كل الأنشطة الـ 12 من الكتاب بدون استثناء
-const questions = [
-  // أنمي معجمي - 1: وصل المعلمة بالمدينة
-  { id:1, type:"match", color:"#16a34a", icon:"🔗", section:"أنمّي معجمي",
-    question:"أصل كل معلمة باسم المدينة التي توجد بها:",
-    pairs:[
-      {item:"جامع القرويين", answer:"فاس"},
-      {item:"قصر البديع", answer:"مراكش"},
-      {item:"مسجد الحسن الثاني", answer:"الدار البيضاء"},
-      {item:"ضريح محمد الخامس", answer:"الرباط"},
-    ], hint:"راجع الصور في بداية الدرس 💡" },
-
-  // أنمي معجمي - 2: شبكة مفردات (كتابة حرة)
-  { id:2, type:"open", color:"#16a34a", icon:"✍️", section:"أنمّي معجمي",
-    question:"أكمل شبكة مفردات كلمة «حضارة»: اكتب كلمتين مرتبطتين بها (مثل: صوامع):",
-    sample:"أمثلة: مآثر، تاريخ، آثار، فن، معالم، تراث" },
-
-  // أفهم - 3: اختيار من متعدد
-  { id:3, type:"mcq", color:"#2563eb", icon:"🔵", section:"أفهم",
-    question:"طلب الأب من ابنته الجلوس بجانبه لـ:",
-    options:["متابعة حلقة جديدة من المسلسل","متابعة برنامج تلفزي","متابعة نشرة الأخبار"],
-    correct:"متابعة برنامج تلفزي", hint:"ماذا كان يعرض التلفاز؟ 💡" },
-
-  // أفهم - 4: إكمال الجدول (3 عناصر) - وصل
-  { id:4, type:"match", color:"#9333ea", icon:"📋", section:"أفهم",
-    question:"أصل كل أثر بوصفه المناسب من النص:",
-    pairs:[
-      {item:"صومعة حسان", answer:"منتصبة جانب ضريح محمد الخامس"},
-      {item:"مسجد الحسن الثاني", answer:"تداعبه أمواج البحر"},
-      {item:"جامع القرويين", answer:"شاهد على مهارة منشئيه"},
-    ], hint:"راجع الفقرتين 2 و3 💡" },
-
-  // أفهم - 5: ملء فراغ
-  { id:5, type:"blank", color:"#9333ea", icon:"✏️", section:"أفهم",
-    question:"أستخرج من النص ما يدل على إعجاب زينب ببرنامج «مآثر بلادي» (أكمل: كنت أود أن ___ البرنامج):",
-    correct:"يطول", hint:"انظر الفقرة الأخيرة من النص 💡" },
-
-  // أفهم - 6: سؤال مفتوح
-  { id:6, type:"open", color:"#2563eb", icon:"✍️", section:"أفهم",
-    question:"علام يدل تنوع مآثر المغرب؟",
-    sample:"نموذج إجابة: يدل تنوع مآثر المغرب على عراقة حضارته وازدهارها عبر العصور، وعلى مهارة وإبداع أبنائه." },
-
-  // أحلل - 7: عنوان الفقرة 1
-  { id:7, type:"mcq", color:"#ea580c", icon:"📝", section:"أحلل",
-    question:"اقترح عنواناً للفقرة الأولى:",
-    options:["برنامج عن مآثر بلادي","رحلة إلى فاس","صومعة حسان","المدرسة"],
-    correct:"برنامج عن مآثر بلادي", hint:"عن ماذا تتحدث الفقرة الأولى؟ 💡" },
-
-  { id:8, type:"mcq", color:"#ea580c", icon:"📝", section:"أحلل",
-    question:"اقترح عنواناً للفقرة الثانية:",
-    options:["مآثر فاس","مآثر مراكش","مسجد الحسن الثاني","نهاية البرنامج"],
-    correct:"مآثر فاس", hint:"عن أي مدينة تتحدث الفقرة الثانية؟ 💡" },
-
-  { id:9, type:"mcq", color:"#ea580c", icon:"📝", section:"أحلل",
-    question:"اقترح عنواناً للفقرة الثالثة:",
-    options:["مآثر مكناس ومراكش والرباط والدار البيضاء","مآثر فاس فقط","المدرسة العتيقة","برنامج تلفزي"],
-    correct:"مآثر مكناس ومراكش والرباط والدار البيضاء", hint:"كم مدينة ذكرت في الفقرة الثالثة؟ 💡" },
-
-  { id:10, type:"mcq", color:"#ea580c", icon:"📝", section:"أحلل",
-    question:"اقترح عنواناً للفقرة الرابعة:",
-    options:["نهاية البرنامج","بداية القصة","وصف مسجد","وصف مدرسة"],
-    correct:"نهاية البرنامج", hint:"ماذا حدث في آخر الفقرة؟ 💡" },
-
-  // أحلل - 8: استخراج الآثار (اختيار متعدد - إجابات متعددة)
-  { id:11, type:"multi", color:"#ea580c", icon:"☑️", section:"أحلل",
-    question:"استخرج من النص الآثار التاريخية التي تبرز عظمة حضارة المغرب (اختر جميع الإجابات الصحيحة):",
-    options:["جامع القرويين","مسجد الحسن الثاني","برج إيفل","صومعة حسان","تمثال الحرية","قصر البديع"],
-    correct:["جامع القرويين","مسجد الحسن الثاني","صومعة حسان","قصر البديع"],
-    hint:"كل الآثار المغربية المذكورة في النص 💡" },
-
-  // أركب وأقوم - 9: عنوان آخر (مفتوح)
-  { id:12, type:"open", color:"#be185d", icon:"✍️", section:"أركب وأقوّم",
-    question:"اقترح عنواناً آخر للنص:",
-    sample:"أمثلة: كنوز بلادي، رحلة في حضارة المغرب، مآثر خالدة" },
-
-  // أركب وأقوم - 10: تلخيص (مفتوح)
-  { id:13, type:"open", color:"#be185d", icon:"✍️", section:"أركب وأقوّم",
-    question:"استعن بعناوين الفقرات لتلخص النص في جملتين:",
-    sample:"نموذج: تحكي زينب عن برنامج تلفزي شاهدته مع والدها عن مآثر المغرب، حيث تجولا عبر الشاشة بين فاس ومراكش والرباط والدار البيضاء، مستمتعين بروعة الآثار التاريخية." },
-
-  // أركب وأقوم - 11: الرأي (مفتوح)
-  { id:14, type:"open", color:"#be185d", icon:"✍️", section:"أركب وأقوّم",
-    question:"أبدِ رأيك في معلمة من معالم بلادك:",
-    sample:"اكتب رأيك الشخصي بحرية عن أي معلمة تاريخية تعرفها" },
-
-  // أركب وأقوم - ترتيب (تمرين إضافي تفاعلي)
-  { id:15, type:"order", color:"#be185d", icon:"🔀", section:"أركب وأقوّم",
-    question:"رتّب الكلمات لتكوّن جملة صحيحة من النص:",
-    words:["أجدادها","بمآثر","كل أمة","تعتز"],
-    correct:["تعتز","كل أمة","بمآثر","أجدادها"], hint:"ابدأ بالفعل 💡" },
-
-  // أركب وأقوم - 12: مشروع شخصي (مفتوح)
-  { id:16, type:"open", color:"#be185d", icon:"🏠", section:"في المنزل",
-    question:"في المنزل: اكتب بأسلوبك الخاص ما تعلمته من هذا النص، لتستثمره في إعداد مشروعك:",
-    sample:"هذا نشاط منزلي — اكتب إجابتك وشاركها مع أستاذك غداً" },
-]
+const yearNames: {[key:string]:string} = {"1":"الأولى","2":"الثانية","3":"الثالثة","4":"الرابعة","5":"الخامسة","6":"السادسة"}
+const unitNames: {[key:string]:string} = {"1":"الأولى","2":"الثانية","3":"الثالثة","4":"الرابعة","5":"الخامسة","6":"السادسة"}
+const lessonNames: {[key:string]:string} = {"1":"القراءة","2":"الصرف","3":"التراكيب","4":"الإملاء","5":"التعبير الكتابي","6":"التواصل الشفهي"}
+const lessonColors: {[key:string]:string} = {"1":"#2563eb","2":"#16a34a","3":"#9333ea","4":"#ea580c","5":"#0891b2","6":"#be185d"}
 
 // شريط إمكانية الوصول الشامل
 function AccessibilityBar({settings, setSettings}: any) {
@@ -169,14 +66,19 @@ function playClap() {
 }
 
 function formatTime(s: number) { return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}` }
-function shuffleArr<T>(arr: T[]): T[] { return [...arr].sort(() => Math.random() - 0.5) }
 
-function AudioPlayer({textColor, fontSize, highContrast}: {textColor?: string, fontSize?: string, highContrast?: boolean}) {
+// عارض النص: مع مشغّل صوتي إن وُجد ملف صوتي، أو نص فقط إن لم يوجد
+function TextReader({text, textColor, fontSize, highContrast}: {text: ReadingText, textColor?: string, fontSize?: string, highContrast?: boolean}) {
   const audioRef = useRef<HTMLAudioElement|null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [activePara, setActivePara] = useState(-1)
   const intervalRef = useRef<any>(null)
+
+  const hasAudio = !!text.audio
+  const AUDIO_START = text.audio?.start ?? 0
+  const AUDIO_END = text.audio?.end ?? 0
+  const AUDIO_DURATION = AUDIO_END - AUDIO_START
 
   const play = () => {
     if(!audioRef.current) return
@@ -189,7 +91,7 @@ function AudioPlayer({textColor, fontSize, highContrast}: {textColor?: string, f
       if(t >= AUDIO_END){ pause(); return }
       const e = t - AUDIO_START; const ratio = e / AUDIO_DURATION
       setElapsed(e)
-      setActivePara(paragraphs.findIndex(p => ratio >= p.start && ratio < p.end))
+      setActivePara(text.paragraphs.findIndex(p => ratio >= p.start && ratio < p.end))
     }, 100)
   }
   const pause = () => { audioRef.current?.pause(); setIsPlaying(false); if(intervalRef.current) clearInterval(intervalRef.current) }
@@ -204,9 +106,9 @@ function AudioPlayer({textColor, fontSize, highContrast}: {textColor?: string, f
 
   return (
     <div>
-      <audio ref={audioRef} src="/audio/maatir.mp3" preload="auto"/>
-      <div style={{marginBottom:"20px"}}>
-        {paragraphs.map((p, i) => (
+      {hasAudio && <audio ref={audioRef} src={text.audio!.src} preload="auto"/>}
+      <div style={{marginBottom: hasAudio ? "20px" : "0"}}>
+        {text.paragraphs.map((p, i) => (
           <div key={i} style={{background: activePara === i ? "#fef9c3" : "transparent",borderRadius:"8px",
             padding: activePara === i ? "10px 14px" : "4px 0",marginBottom:"10px",
             borderRight: activePara === i ? "4px solid #2563eb" : "4px solid transparent",transition:"all 0.3s"}}>
@@ -225,38 +127,40 @@ function AudioPlayer({textColor, fontSize, highContrast}: {textColor?: string, f
           </div>
         ))}
       </div>
-      <div style={{background:"#f8fafc",borderRadius:"14px",padding:"16px",border:"1px solid #e2e8f0"}}>
-        <div onClick={seek} style={{background:"#e2e8f0",borderRadius:"100px",height:"10px",marginBottom:"10px",cursor:"pointer",position:"relative"}}>
-          <div style={{background:"linear-gradient(90deg,#2563eb,#1e3a8a)",borderRadius:"100px",height:"10px",
-            width:`${Math.min((elapsed/AUDIO_DURATION)*100,100)}%`,transition:"width 0.1s",position:"relative"}}>
-            <div style={{position:"absolute",left:"-7px",top:"-3px",width:"16px",height:"16px",borderRadius:"50%",
-              background:"#2563eb",boxShadow:"0 2px 6px rgba(37,99,235,0.5)"}}/>
+      {hasAudio && (
+        <div style={{background:"#f8fafc",borderRadius:"14px",padding:"16px",border:"1px solid #e2e8f0"}}>
+          <div onClick={seek} style={{background:"#e2e8f0",borderRadius:"100px",height:"10px",marginBottom:"10px",cursor:"pointer",position:"relative"}}>
+            <div style={{background:"linear-gradient(90deg,#2563eb,#1e3a8a)",borderRadius:"100px",height:"10px",
+              width:`${Math.min((elapsed/AUDIO_DURATION)*100,100)}%`,transition:"width 0.1s",position:"relative"}}>
+              <div style={{position:"absolute",left:"-7px",top:"-3px",width:"16px",height:"16px",borderRadius:"50%",
+                background:"#2563eb",boxShadow:"0 2px 6px rgba(37,99,235,0.5)"}}/>
+            </div>
           </div>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#6b7280",marginBottom:"12px"}}>
-          <span>{formatTime(elapsed)}</span><span>{formatTime(AUDIO_DURATION)}</span>
-        </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
-          <button onClick={()=>{if(audioRef.current){audioRef.current.currentTime=AUDIO_START;setElapsed(0);setActivePara(-1)}}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px"}}>⏮️</button>
-          <button onClick={()=>{if(audioRef.current){const t=Math.max(AUDIO_START,audioRef.current.currentTime-10);audioRef.current.currentTime=t;setElapsed(t-AUDIO_START)}}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"13px",fontWeight:"bold",color:"#374151"}}>-10</button>
-          <button onClick={isPlaying ? pause : play}
-            style={{background:"linear-gradient(135deg,#2563eb,#1e3a8a)",border:"none",borderRadius:"50%",width:"54px",height:"54px",
-              cursor:"pointer",fontSize:"22px",color:"white",boxShadow:"0 4px 14px rgba(37,99,235,0.4)"}}>{isPlaying ? "⏸️" : "▶️"}</button>
-          <button onClick={()=>{if(audioRef.current){const t=Math.min(AUDIO_END,audioRef.current.currentTime+10);audioRef.current.currentTime=t;setElapsed(t-AUDIO_START)}}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"13px",fontWeight:"bold",color:"#374151"}}>+10</button>
-          <button onClick={()=>{pause();if(audioRef.current){audioRef.current.currentTime=AUDIO_START;setElapsed(0);setActivePara(-1)}}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px"}}>⏹️</button>
-        </div>
-        {isPlaying && (
-          <div style={{display:"flex",justifyContent:"center",gap:"3px",marginTop:"10px",alignItems:"center"}}>
-            {[0,1,2,3].map(i=>(<div key={i} style={{width:"4px",borderRadius:"2px",background:"#2563eb",
-              animation:"wave 0.8s ease-in-out infinite",animationDelay:`${i*0.15}s`,height:"16px"}}/>))}
-            <style>{`@keyframes wave{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1.2)}}`}</style>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"#6b7280",marginBottom:"12px"}}>
+            <span>{formatTime(elapsed)}</span><span>{formatTime(AUDIO_DURATION)}</span>
           </div>
-        )}
-      </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
+            <button onClick={()=>{if(audioRef.current){audioRef.current.currentTime=AUDIO_START;setElapsed(0);setActivePara(-1)}}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px"}}>⏮️</button>
+            <button onClick={()=>{if(audioRef.current){const t=Math.max(AUDIO_START,audioRef.current.currentTime-10);audioRef.current.currentTime=t;setElapsed(t-AUDIO_START)}}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"13px",fontWeight:"bold",color:"#374151"}}>-10</button>
+            <button onClick={isPlaying ? pause : play}
+              style={{background:"linear-gradient(135deg,#2563eb,#1e3a8a)",border:"none",borderRadius:"50%",width:"54px",height:"54px",
+                cursor:"pointer",fontSize:"22px",color:"white",boxShadow:"0 4px 14px rgba(37,99,235,0.4)"}}>{isPlaying ? "⏸️" : "▶️"}</button>
+            <button onClick={()=>{if(audioRef.current){const t=Math.min(AUDIO_END,audioRef.current.currentTime+10);audioRef.current.currentTime=t;setElapsed(t-AUDIO_START)}}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"13px",fontWeight:"bold",color:"#374151"}}>+10</button>
+            <button onClick={()=>{pause();if(audioRef.current){audioRef.current.currentTime=AUDIO_START;setElapsed(0);setActivePara(-1)}}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:"50%",width:"38px",height:"38px",cursor:"pointer",fontSize:"16px"}}>⏹️</button>
+          </div>
+          {isPlaying && (
+            <div style={{display:"flex",justifyContent:"center",gap:"3px",marginTop:"10px",alignItems:"center"}}>
+              {[0,1,2,3].map(i=>(<div key={i} style={{width:"4px",borderRadius:"2px",background:"#2563eb",
+                animation:"wave 0.8s ease-in-out infinite",animationDelay:`${i*0.15}s`,height:"16px"}}/>))}
+              <style>{`@keyframes wave{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1.2)}}`}</style>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -383,15 +287,12 @@ function OpenQuestion({q, onDone}: any) {
   )
 }
 
-export default function LessonPage() {
-  const params = useParams()
-  const year = params.year as string
-  const unit = params.unit as string
-  const lesson = params.lesson as string
-  const isMaatir = year==="4" && lesson==="1" && unit==="1"
-
-  const [mounted, setMounted] = useState(false)
-  const [shuffledQs, setShuffledQs] = useState(questions)
+// ================= مكوّن الدرس التفاعلي (لأي نص) =================
+function LessonContent({text, year, unit, lesson, onBackToSelection, showBackToSelection}: {
+  text: ReadingText, year: string, unit: string, lesson: string,
+  onBackToSelection: () => void, showBackToSelection: boolean
+}) {
+  const questions = text.questions
   const [currentIdx, setCurrentIdx] = useState(0)
   const [qAnswers, setQAnswers] = useState<{[id:number]:{correct:boolean,attempts:number}}>({})
   const [orderSelected, setOrderSelected] = useState<string[]>([])
@@ -407,20 +308,14 @@ export default function LessonPage() {
   const [shuffledOpts, setShuffledOpts] = useState<string[]>([])
   const [a11y, setA11y] = useState({bigText:false, highContrast:false, readAloud:false})
 
-  useEffect(() => { setMounted(true); setShuffledQs(questions) }, [])
-
-  const yearNames: {[key:string]:string} = {"1":"الأولى","2":"الثانية","3":"الثالثة","4":"الرابعة","5":"الخامسة","6":"السادسة"}
-  const unitNames: {[key:string]:string} = {"1":"الأولى","2":"الثانية","3":"الثالثة","4":"الرابعة","5":"الخامسة","6":"السادسة"}
-  const lessonNames: {[key:string]:string} = {"1":"القراءة","2":"الصرف","3":"التراكيب","4":"الإملاء","5":"التعبير الكتابي","6":"التواصل الشفهي"}
-  const lessonColors: {[key:string]:string} = {"1":"#2563eb","2":"#16a34a","3":"#9333ea","4":"#ea580c","5":"#0891b2","6":"#be185d"}
   const color = lessonColors[lesson] || "#2563eb"
   const bgMain = a11y.highContrast ? "#000000" : "linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)"
   const cardBg = a11y.highContrast ? "#111827" : "white"
   const textColor = a11y.highContrast ? "#f9fafb" : "#1e293b"
   const fontSize = a11y.bigText ? "20px" : "17px"
   const questionFontSize = a11y.bigText ? "20px" : "17px"
-  const currentQ = shuffledQs[currentIdx]
-  const totalQ = shuffledQs.length
+  const currentQ = questions[currentIdx]
+  const totalQ = questions.length
 
   useEffect(() => {
     if(currentQ?.type==="order") setShuffledWords([...(currentQ as any).words].sort(()=>Math.random()-0.5))
@@ -429,13 +324,13 @@ export default function LessonPage() {
   }, [currentIdx, currentQ])
 
   useEffect(() => {
-    if(a11y.readAloud && currentQ && mounted) {
+    if(a11y.readAloud && currentQ) {
       const u = new SpeechSynthesisUtterance(currentQ.question)
       u.lang = 'ar'
       window.speechSynthesis.cancel()
       window.speechSynthesis.speak(u)
     }
-  }, [currentIdx, a11y.readAloud, mounted])
+  }, [currentIdx, a11y.readAloud])
 
   const handleCorrect = () => {
     playClap(); setCorrectFlash(true); setTimeout(()=>setCorrectFlash(false), 800)
@@ -468,7 +363,7 @@ export default function LessonPage() {
           const oldTotal = (ep||[]).filter((p:any)=>p.lesson?.includes(subjectName)).reduce((s:number,p:any)=>s+p.points,0)
           const newTotal = oldTotal+score
           await supabase.from('points').insert({user_id:session.user.id,points:score,
-            lesson:`السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName}`})
+            lesson:`السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${text.title})`})
           setSavedPoints(true)
           const badge = subjectBadges[lesson]
           if(badge && oldTotal<badge.min && newTotal>=badge.min) setNewBadge(badge)
@@ -478,27 +373,9 @@ export default function LessonPage() {
   }
 
   const restartLesson = () => {
-    setShuffledQs(questions); setCurrentIdx(0); setQAnswers({}); setOrderSelected([]); setBlankValue("")
+    setCurrentIdx(0); setQAnswers({}); setOrderSelected([]); setBlankValue("")
     setShowHint(false); setFinished(false); setShowStars(false); setSavedPoints(false)
   }
-
-  if(!mounted) return (
-    <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
-      <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
-    </div>
-  )
-
-  if(!isMaatir) return (
-    <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{textAlign:"center"}}>
-        <div style={{fontSize:"64px",marginBottom:"16px"}}>🚧</div>
-        <p style={{fontSize:"20px",color:"#6b7280"}}>هذا الدرس قيد التطوير</p>
-        <a href={`/levels/primary/${year}/unit/${unit}`}>
-          <button style={{background:color,color:"white",border:"none",padding:"12px 24px",borderRadius:"8px",cursor:"pointer",marginTop:"16px",fontSize:"16px",fontWeight:"bold"}}>العودة</button>
-        </a>
-      </div>
-    </main>
-  )
 
   return (
     <main dir="rtl" style={{minHeight:"100vh",background:bgMain,fontFamily:"Arial",transition:"background 0.3s"}}>
@@ -524,33 +401,34 @@ export default function LessonPage() {
         </div>
       )}
 
-      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-        <h1 style={{color:color,fontSize:"22px",fontWeight:"bold",margin:0}}>📖 القراءة — مآثر بلادي</h1>
-        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"14px"}}>السنة الرابعة — الوحدة الأولى</span>
+      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",flexWrap:"wrap",gap:"8px"}}>
+        <h1 style={{color:color,fontSize:"22px",fontWeight:"bold",margin:0}}>📖 القراءة — {text.title}</h1>
+        <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+          <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"14px"}}>السنة {yearNames[year]} — الوحدة {unitNames[unit]}</span>
+          {showBackToSelection && (
+            <button onClick={onBackToSelection} style={{color:"#1e40af",background:"#dbeafe",border:"none",fontWeight:"bold",padding:"8px 14px",borderRadius:"8px",cursor:"pointer",fontSize:"14px"}}>📚 نص آخر</button>
+          )}
           <a href={`/levels/primary/${year}/unit/${unit}`} style={{color:"#6b7280",textDecoration:"none",fontWeight:"bold",background:"#f3f4f6",padding:"8px 14px",borderRadius:"8px"}}>رجوع</a>
         </div>
       </nav>
 
       <div style={{maxWidth:"900px",margin:"0 auto",padding:"24px"}}>
         <AccessibilityBar settings={a11y} setSettings={setA11y} />
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px",marginBottom:"20px"}}>
-          {[
-            {src:"/images/qarawiyyin.jpg", label:"جامع القرويين — فاس"},
-            {src:"/images/hassan.jpg", label:"صومعة حسان — الرباط"},
-            {src:"/images/hassan2.jpg", label:"مسجد الحسن الثاني — الدار البيضاء"},
-          ].map((img,i)=>(
-            <div key={i} style={{borderRadius:"12px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.12)"}}>
-              <img src={img.src} alt={img.label} style={{width:"100%",height:"120px",objectFit:"cover",display:"block"}}/>
-              <div style={{background:"rgba(30,58,138,0.85)",color:"white",padding:"6px 10px",fontSize:"12px",textAlign:"center",fontWeight:"bold"}}>{img.label}</div>
-            </div>
-          ))}
-        </div>
+        {text.images.length > 0 && (
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${text.images.length},1fr)`,gap:"12px",marginBottom:"20px"}}>
+            {text.images.map((img,i)=>(
+              <div key={i} style={{borderRadius:"12px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.12)"}}>
+                <img src={img.src} alt={img.label} style={{width:"100%",height:"120px",objectFit:"cover",display:"block"}}/>
+                <div style={{background:"rgba(30,58,138,0.85)",color:"white",padding:"6px 10px",fontSize:"12px",textAlign:"center",fontWeight:"bold"}}>{img.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{background:cardBg,borderRadius:"16px",padding:"24px",marginBottom:"20px",borderRight:`5px solid ${color}`,boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
-          <h2 style={{color: a11y.highContrast ? "#fbbf24" : "#1e3a8a",fontSize: a11y.bigText ? "26px" : "22px",fontWeight:"bold",marginBottom:"4px",textAlign:"center"}}>مآثر بلادي</h2>
-          <p style={{color: a11y.highContrast ? "#d1d5db" : "#6b7280",textAlign:"center",marginBottom:"20px",fontSize:"13px"}}>السنة الرابعة ابتدائي — الوحدة الأولى — مجال الحضارة المغربية</p>
-          <AudioPlayer textColor={textColor} fontSize={fontSize} highContrast={a11y.highContrast} />
+          <h2 style={{color: a11y.highContrast ? "#fbbf24" : "#1e3a8a",fontSize: a11y.bigText ? "26px" : "22px",fontWeight:"bold",marginBottom:"4px",textAlign:"center"}}>{text.title}</h2>
+          <p style={{color: a11y.highContrast ? "#d1d5db" : "#6b7280",textAlign:"center",marginBottom:"20px",fontSize:"13px"}}>السنة {yearNames[year]} ابتدائي — الوحدة {unitNames[unit]} — {text.subtitle}</p>
+          <TextReader text={text} textColor={textColor} fontSize={fontSize} highContrast={a11y.highContrast} />
         </div>
 
         {!finished ? (
@@ -665,10 +543,13 @@ export default function LessonPage() {
                     <span style={{color:"#6b7280",fontSize:"16px"}}> / 100 نقطة</span>
                   </div>
                   <p style={{color:"#6b7280",fontSize:"16px",marginBottom:"24px"}}>
-                    {score===100?"ممتاز! أكملت كل الأنشطة الـ 16! 🌟":"جيد! استمر في التقدم! 👍"}
+                    {score===100?`ممتاز! أكملت كل الأنشطة الـ ${totalQ}! 🌟`:"جيد! استمر في التقدم! 👍"}
                   </p>
-                  <div style={{display:"flex",gap:"12px",justifyContent:"center"}}>
+                  <div style={{display:"flex",gap:"12px",justifyContent:"center",flexWrap:"wrap"}}>
                     <button onClick={restartLesson} style={{background:"#2563eb",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"15px"}}>🔄 إعادة المحاولة</button>
+                    {showBackToSelection && (
+                      <button onClick={onBackToSelection} style={{background:"#16a34a",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"15px"}}>📚 نص آخر</button>
+                    )}
                     <a href={`/levels/primary/${year}/unit/${unit}`}>
                       <button style={{background:"#6b7280",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"15px"}}>العودة</button>
                     </a>
@@ -678,6 +559,95 @@ export default function LessonPage() {
             })()}
           </div>
         )}
+      </div>
+    </main>
+  )
+}
+
+// ================= الصفحة الرئيسية للدرس =================
+export default function LessonPage() {
+  const params = useParams()
+  const year = params.year as string
+  const unit = params.unit as string
+  const lesson = params.lesson as string
+
+  const [mounted, setMounted] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  useEffect(() => { setMounted(true) }, [])
+
+  // نصوص القراءة متاحة فقط لمكوّن القراءة (lesson = 1)
+  const texts: ReadingText[] = lesson === "1" ? (readingTexts[`${year}-${unit}`] || []) : []
+  const selectedText = texts.find(t => t.id === selectedId) || null
+  const color = lessonColors[lesson] || "#2563eb"
+
+  if(!mounted) return (
+    <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
+      <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
+    </div>
+  )
+
+  // لا توجد نصوص لهذا الدرس بعد
+  if(texts.length === 0) return (
+    <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:"64px",marginBottom:"16px"}}>🚧</div>
+        <p style={{fontSize:"20px",color:"#6b7280"}}>هذا الدرس قيد التطوير</p>
+        <a href={`/levels/primary/${year}/unit/${unit}`}>
+          <button style={{background:color,color:"white",border:"none",padding:"12px 24px",borderRadius:"8px",cursor:"pointer",marginTop:"16px",fontSize:"16px",fontWeight:"bold"}}>العودة</button>
+        </a>
+      </div>
+    </main>
+  )
+
+  // نص واحد فقط: ادخل مباشرة بدون شاشة اختيار
+  if(texts.length === 1) return (
+    <LessonContent key={texts[0].id} text={texts[0]} year={year} unit={unit} lesson={lesson}
+      onBackToSelection={()=>{}} showBackToSelection={false} />
+  )
+
+  // تم اختيار نص: اعرض الدرس التفاعلي
+  if(selectedText) return (
+    <LessonContent key={selectedText.id} text={selectedText} year={year} unit={unit} lesson={lesson}
+      onBackToSelection={()=>setSelectedId(null)} showBackToSelection={true} />
+  )
+
+  // شاشة اختيار النص
+  return (
+    <main dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)",fontFamily:"Arial"}}>
+      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
+        <h1 style={{color:color,fontSize:"22px",fontWeight:"bold",margin:0}}>📖 القراءة — اختر النص</h1>
+        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"14px"}}>السنة {yearNames[year]} — الوحدة {unitNames[unit]}</span>
+          <a href={`/levels/primary/${year}/unit/${unit}`} style={{color:"#6b7280",textDecoration:"none",fontWeight:"bold",background:"#f3f4f6",padding:"8px 14px",borderRadius:"8px"}}>رجوع</a>
+        </div>
+      </nav>
+
+      <div style={{maxWidth:"900px",margin:"0 auto",padding:"32px 24px"}}>
+        <h2 style={{color:"#1e3a8a",fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"8px"}}>📚 نصوص القراءة المتاحة</h2>
+        <p style={{color:"#6b7280",textAlign:"center",marginBottom:"28px",fontSize:"15px"}}>اختر النص الذي تريد قراءته والتفاعل مع أنشطته</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"20px"}}>
+          {texts.map(t => (
+            <div key={t.id} style={{background:"white",borderRadius:"16px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.1)",display:"flex",flexDirection:"column"}}>
+              {t.images[0] && (
+                <img src={t.images[0].src} alt={t.title} style={{width:"100%",height:"150px",objectFit:"cover",display:"block"}}/>
+              )}
+              <div style={{padding:"20px",display:"flex",flexDirection:"column",flex:1}}>
+                <h3 style={{color:"#1e3a8a",fontSize:"20px",fontWeight:"bold",margin:"0 0 6px 0"}}>{t.title}</h3>
+                <p style={{color:"#6b7280",fontSize:"13px",margin:"0 0 12px 0",flex:1}}>{t.subtitle}</p>
+                <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"16px"}}>
+                  <span style={{background:"#dbeafe",color:"#1e40af",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:"bold"}}>✏️ {t.questions.length} نشاطاً</span>
+                  {t.audio && <span style={{background:"#f0fdf4",color:"#16a34a",padding:"4px 10px",borderRadius:"20px",fontSize:"12px",fontWeight:"bold"}}>🎧 قراءة صوتية</span>}
+                </div>
+                <button onClick={()=>setSelectedId(t.id)}
+                  style={{background:`linear-gradient(135deg,${color},#1e3a8a)`,color:"white",border:"none",padding:"14px",borderRadius:"10px",
+                    cursor:"pointer",fontWeight:"bold",fontSize:"16px",width:"100%"}}>
+                  ابدأ الدرس ←
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   )
