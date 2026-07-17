@@ -68,7 +68,7 @@ export default function LoginPage() {
           />
         </div>
 
-        <div style={{marginBottom:"24px"}}>
+        <div style={{marginBottom:"8px"}}>
           <label style={{display:"block",marginBottom:"8px",fontWeight:"bold",color:"#374151"}}>
             كلمة المرور
           </label>
@@ -79,6 +79,12 @@ export default function LoginPage() {
             placeholder="********"
             style={{width:"100%",border:"2px solid #e5e7eb",borderRadius:"8px",padding:"12px",textAlign:"right",fontSize:"16px",boxSizing:"border-box",outline:"none"}}
           />
+        </div>
+
+        <div style={{textAlign:"left",marginBottom:"20px"}}>
+          <a href="/auth/forgot-password" style={{color:"#2563eb",fontSize:"14px",fontWeight:"bold",textDecoration:"none"}}>
+            نسيت كلمة المرور؟ 🔑
+          </a>
         </div>
 
         <button
