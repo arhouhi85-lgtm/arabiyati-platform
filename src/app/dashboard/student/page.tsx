@@ -156,6 +156,9 @@ export default function StudentDashboard() {
           <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 16px",borderRadius:"20px",fontWeight:"bold"}}>
             ⭐ {points} نقطة
           </span>
+          <a href="/dashboard/student/attendance" style={{background:"#f0fdf4",color:"#16a34a",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            📋 غياباتي
+          </a>
           <a href="/dashboard/leaderboard" style={{background:"#fef9c3",color:"#ca8a04",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             🏆 لوحة الصدارة
           </a>

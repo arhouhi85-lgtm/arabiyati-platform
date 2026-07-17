@@ -112,6 +112,9 @@ export default function TeacherDashboard() {
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
         <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة الأستاذ</h1>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <a href="/dashboard/teacher/attendance" style={{background:"#f0fdf4",color:"#16a34a",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            📋 سجل الغياب
+          </a>
           <a href="/dashboard/teacher/leaderboard" style={{background:"#fef9c3",color:"#ca8a04",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             🏆 لوحة الصدارة
           </a>
