@@ -6,6 +6,7 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true)
   const [ranking, setRanking] = useState<any[]>([])
   const [myGrade, setMyGrade] = useState('')
+  const [noClass, setNoClass] = useState(false)
   const [myId, setMyId] = useState('')
   const [weekLabel, setWeekLabel] = useState('')
 
@@ -29,13 +30,16 @@ export default function LeaderboardPage() {
     setMyId(session.user.id)
 
     const { data: myUser } = await supabase
-      .from('users').select('grade_level').eq('id', session.user.id).single()
+      .from('users').select('grade_level, class_id').eq('id', session.user.id).single()
 
     if (!myUser?.grade_level) { setLoading(false); return }
     setMyGrade(myUser.grade_level)
 
+    if (!myUser?.class_id) { setNoClass(true); setLoading(false); return }
+
+    // الترتيب محصور في تلاميذ نفس الفصل فقط (خصوصية بين المؤسسات)
     const { data: gradeUsers } = await supabase
-      .from('users').select('id, name').eq('grade_level', myUser.grade_level)
+      .from('users').select('id, name').eq('class_id', myUser.class_id)
 
     if (!gradeUsers || gradeUsers.length === 0) { setLoading(false); return }
 
@@ -87,18 +91,20 @@ export default function LeaderboardPage() {
 
       <div style={{maxWidth:"700px",margin:"0 auto",padding:"24px"}}>
 
-        {!myGrade ? (
+        {!myGrade || noClass ? (
           <div style={{background:"white",borderRadius:"16px",padding:"32px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
-            <div style={{fontSize:"48px",marginBottom:"12px"}}>⚠️</div>
+            <div style={{fontSize:"48px",marginBottom:"12px"}}>{noClass ? "🏫" : "⚠️"}</div>
             <p style={{color:"#6b7280",fontSize:"16px"}}>
-              لم يتم تحديد سنتك الدراسية بعد. يرجى التواصل مع أستاذك.
+              {noClass
+                ? "لست منضماً إلى فصل بعد. اطلب رمز الفصل من أستاذك ثم انضم من لوحتك لترى صدارة فصلك."
+                : "لم يتم تحديد سنتك الدراسية بعد. يرجى التواصل مع أستاذك."}
             </p>
           </div>
         ) : (
           <>
             <div style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",borderRadius:"16px",padding:"20px",marginBottom:"20px",textAlign:"center",color:"white"}}>
               <p style={{fontSize:"18px",fontWeight:"bold",margin:0}}>
-                🏫 السنة {gradeNames[myGrade]} ابتدائي
+                🏫 صدارة فصلي — السنة {gradeNames[myGrade]} ابتدائي
               </p>
               <p style={{fontSize:"13px",opacity:0.9,marginTop:"4px"}}>{weekLabel}</p>
             </div>
@@ -106,7 +112,7 @@ export default function LeaderboardPage() {
             {ranking.length === 0 ? (
               <div style={{background:"white",borderRadius:"16px",padding:"32px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
                 <div style={{fontSize:"48px",marginBottom:"12px"}}>📚</div>
-                <p style={{color:"#6b7280",fontSize:"16px"}}>لا يوجد تلاميذ في مستواك بعد</p>
+                <p style={{color:"#6b7280",fontSize:"16px"}}>لا يوجد تلاميذ في فصلك بعد</p>
               </div>
             ) : (
               <div style={{background:"white",borderRadius:"16px",padding:"12px",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>

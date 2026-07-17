@@ -26,10 +26,24 @@ export default function TeacherLeaderboardPage() {
     const monthNames = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر']
     setWeekLabel(`أسبوع ${weekStart.getDate()} ${monthNames[weekStart.getMonth()]}`)
 
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { window.location.href = '/auth/login'; return }
+
+    // جلب فصول هذا الأستاذ فقط
+    const { data: myClasses } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('teacher_id', session.user.id)
+
+    const classIds = (myClasses || []).map(c => c.id)
+    if (classIds.length === 0) { setLoading(false); return }
+
+    // الترتيب محصور في تلاميذ فصول الأستاذ فقط
     const { data: allStudents } = await supabase
       .from('users')
       .select('id, name, grade_level')
       .eq('role', 'student')
+      .in('class_id', classIds)
       .not('grade_level', 'is', null)
 
     if (!allStudents || allStudents.length === 0) {
