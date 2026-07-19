@@ -163,10 +163,12 @@ export default function AttendanceReportPage() {
     <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial"}}>
       <style>{`
         @media print {
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .no-print { display: none !important; }
           main { background: white !important; padding: 0 !important; }
-          .print-area { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; margin: 0 !important; }
-          @page { size: A4 landscape; margin: 8mm; }
+          .doc-wrap { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+          .print-area { box-shadow: none !important; border-radius: 0 !important; padding: 8mm !important; margin: 0 !important; }
+          @page { size: A4 landscape; margin: 0; }
         }
       `}</style>
 
@@ -178,7 +180,7 @@ export default function AttendanceReportPage() {
         </div>
       </nav>
 
-      <div style={{maxWidth:"1180px",margin:"0 auto",padding:"20px"}}>
+      <div className="doc-wrap" style={{maxWidth:"1180px",margin:"0 auto",padding:"20px"}}>
 
         {classes.length === 0 ? (
           <div style={{background:"white",borderRadius:"16px",padding:"40px",textAlign:"center"}}>
