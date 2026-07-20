@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { BRAND, GRADIENTS } from '@/lib/brand'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -84,9 +85,12 @@ export default function SignupPage() {
   ]
 
   return (
-    <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
-      <div style={{background:"white",borderRadius:"16px",padding:"32px",width:"420px",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}>
-        <h1 style={{color:"#2563eb",fontSize:"28px",fontWeight:"bold",textAlign:"center",marginBottom:"24px"}}>
+    <main dir="rtl" style={{minHeight:"100vh",background:BRAND.cream,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial",padding:"20px 0"}}>
+      <div style={{background:"white",borderRadius:"18px",padding:"32px",width:"420px",boxShadow:"0 6px 24px rgba(15,61,115,0.12)"}}>
+        <div style={{textAlign:"center",marginBottom:"20px"}}>
+          <img src="/images/logo-mark.png" alt="عربيتي" style={{height:"64px",objectFit:"contain",marginBottom:"8px"}}/>
+        </div>
+        <h1 style={{color:BRAND.navy,fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"24px"}}>
           إنشاء حساب جديد
         </h1>
 
@@ -155,13 +159,13 @@ export default function SignupPage() {
         <button
           onClick={handleSignup}
           disabled={loading}
-          style={{width:"100%",background:"#2563eb",color:"white",border:"none",padding:"14px",borderRadius:"8px",fontSize:"18px",fontWeight:"bold",cursor:"pointer"}}
+          style={{width:"100%",background:GRADIENTS.navy,color:"white",border:"none",padding:"14px",borderRadius:"10px",fontSize:"17px",fontWeight:"bold",cursor:"pointer"}}
         >
           {loading ? "جارٍ إنشاء الحساب..." : "إنشاء حساب"}
         </button>
 
         <p style={{textAlign:"center",marginTop:"16px",color:"#6b7280"}}>
-          لديك حساب؟ <a href="/auth/login" style={{color:"#2563eb",fontWeight:"bold"}}>تسجيل الدخول</a>
+          لديك حساب؟ <a href="/auth/login" style={{color:BRAND.navy,fontWeight:"bold"}}>تسجيل الدخول</a>
         </p>
       </div>
     </main>

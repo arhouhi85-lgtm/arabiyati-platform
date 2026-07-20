@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getUpcomingEvents, daysUntil, fmtRange } from '@/lib/calendarEvents'
+import { BRAND, GRADIENTS } from '@/lib/brand'
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -114,8 +115,11 @@ export default function TeacherDashboard() {
 
   return (
     <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial"}}>
-      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
-        <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة الأستاذ</h1>
+      <nav style={{background:"white",padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 10px rgba(15,61,115,0.08)",flexWrap:"wrap",gap:"10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
+          <img src="/images/logo-mark.png" alt="عربيتي" style={{height:"38px",objectFit:"contain"}}/>
+          <h1 style={{color:BRAND.navy,fontSize:"19px",fontWeight:"bold",margin:0}}>لوحة الأستاذ</h1>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <a href="/dashboard/teacher/agenda" style={{background:"#ecfeff",color:"#0891b2",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             📅 المفكرة

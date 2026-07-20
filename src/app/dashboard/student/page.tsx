@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getUpcomingEvents, daysUntil, fmtRange } from '@/lib/calendarEvents'
+import { BRAND, GRADIENTS } from '@/lib/brand'
 
 export default function StudentDashboard() {
   const [points, setPoints] = useState(0)
@@ -152,8 +153,11 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
-        <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة التلميذ</h1>
+      <nav style={{background:"white",padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 10px rgba(15,61,115,0.08)",flexWrap:"wrap",gap:"10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
+          <img src="/images/logo-mark.png" alt="عربيتي" style={{height:"38px",objectFit:"contain"}}/>
+          <h1 style={{color:BRAND.navy,fontSize:"19px",fontWeight:"bold",margin:0}}>لوحة التلميذ</h1>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 16px",borderRadius:"20px",fontWeight:"bold"}}>
             ⭐ {points} نقطة

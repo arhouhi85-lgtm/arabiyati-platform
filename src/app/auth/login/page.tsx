@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { BRAND, GRADIENTS } from '@/lib/brand'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -48,12 +49,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main dir="rtl" style={{minHeight:"100vh",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
-      <div style={{background:"white",borderRadius:"16px",padding:"40px",width:"100%",maxWidth:"420px",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}>
+    <main dir="rtl" style={{minHeight:"100vh",background:BRAND.cream,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
+      <div style={{background:"white",borderRadius:"18px",padding:"40px",width:"100%",maxWidth:"420px",boxShadow:"0 6px 24px rgba(15,61,115,0.12)"}}>
 
-        <div style={{textAlign:"center",marginBottom:"32px"}}>
-          <h1 style={{color:"#2563eb",fontSize:"32px",fontWeight:"bold",marginBottom:"8px"}}>عربيتي</h1>
-          <p style={{color:"#6b7280",fontSize:"16px"}}>سجل دخولك للمنصة</p>
+        <div style={{textAlign:"center",marginBottom:"28px"}}>
+          <img src="/images/logo-mark.png" alt="عربيتي" style={{height:"78px",objectFit:"contain",marginBottom:"10px"}}/>
+          <h1 style={{color:BRAND.navy,fontSize:"26px",fontWeight:"bold",marginBottom:"6px"}}>عربيتي</h1>
+          <p style={{color:"#6b7280",fontSize:"15px"}}>سجل دخولك للمنصة</p>
         </div>
 
         {error && (
@@ -89,7 +91,7 @@ export default function LoginPage() {
         </div>
 
         <div style={{textAlign:"left",marginBottom:"20px"}}>
-          <a href="/auth/forgot-password" style={{color:"#2563eb",fontSize:"14px",fontWeight:"bold",textDecoration:"none"}}>
+          <a href="/auth/forgot-password" style={{color:BRAND.navy,fontSize:"14px",fontWeight:"bold",textDecoration:"none"}}>
             نسيت كلمة المرور؟ 🔑
           </a>
         </div>
@@ -97,13 +99,13 @@ export default function LoginPage() {
         <button
           onClick={handleLogin}
           disabled={loading}
-          style={{width:"100%",background:"#2563eb",color:"white",border:"none",padding:"14px",borderRadius:"8px",fontSize:"18px",fontWeight:"bold",cursor:"pointer",marginBottom:"16px"}}>
+          style={{width:"100%",background:GRADIENTS.navy,color:"white",border:"none",padding:"14px",borderRadius:"10px",fontSize:"17px",fontWeight:"bold",cursor:"pointer",marginBottom:"16px"}}>
           {loading ? 'جارٍ التحميل...' : 'تسجيل الدخول'}
         </button>
 
         <p style={{textAlign:"center",color:"#6b7280"}}>
           ليس لديك حساب؟{' '}
-          <a href="/auth/signup" style={{color:"#ec4899",fontWeight:"bold",textDecoration:"none"}}>
+          <a href="/auth/signup" style={{color:BRAND.goldDark,fontWeight:"bold",textDecoration:"none"}}>
             أنشئ حساباً
           </a>
         </p>
