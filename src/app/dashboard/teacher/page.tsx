@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getUpcomingEvents, daysUntil, fmtRange } from '@/lib/calendarEvents'
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -116,6 +117,9 @@ export default function TeacherDashboard() {
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
         <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة الأستاذ</h1>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <a href="/dashboard/teacher/agenda" style={{background:"#ecfeff",color:"#0891b2",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            📅 المفكرة
+          </a>
           <a href="/dashboard/teacher/community" style={{background:"#eff6ff",color:"#2563eb",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             🌐 مجتمع المعرفة
           </a>
@@ -143,6 +147,29 @@ export default function TeacherDashboard() {
           <h2 style={{fontSize:"24px",fontWeight:"bold",margin:0}}>مرحباً أستاذ {teacherName} 👋</h2>
           <p style={{opacity:0.85,marginTop:"8px"}}>هذه نظرة عامة حقيقية على تقدم تلاميذك</p>
         </div>
+
+        {(() => {
+          const upcoming = getUpcomingEvents(new Date(), 1)
+          if (upcoming.length === 0) return null
+          const ev = upcoming[0]
+          const dleft = daysUntil(ev.date)
+          return (
+            <a href="/dashboard/teacher/agenda" style={{textDecoration:"none"}}>
+              <div style={{background:"white",borderRadius:"14px",padding:"16px 20px",marginBottom:"24px",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",
+                display:"flex",alignItems:"center",gap:"14px",border:"1px solid #cffafe",cursor:"pointer"}}>
+                <span style={{fontSize:"30px"}}>{ev.icon}</span>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontSize:"12px",color:"#0891b2",fontWeight:"bold"}}>📅 المحطة القادمة</p>
+                  <p style={{margin:"2px 0 0 0",fontSize:"15px",fontWeight:"bold",color:"#1e293b"}}>{ev.title}</p>
+                  <p style={{margin:"2px 0 0 0",fontSize:"12.5px",color:"#9ca3af"}}>{fmtRange(ev)}</p>
+                </div>
+                <span style={{background:"#ecfeff",color:"#0891b2",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"13px",whiteSpace:"nowrap"}}>
+                  {dleft === 0 ? "اليوم" : dleft === 1 ? "غداً" : `بعد ${dleft} يوم`}
+                </span>
+              </div>
+            </a>
+          )
+        })()}
 
         {/* قسم الفصول */}
         <div style={{background:"white",borderRadius:"16px",padding:"20px",marginBottom:"24px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>
