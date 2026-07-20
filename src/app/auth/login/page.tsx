@@ -31,7 +31,14 @@ export default function LoginPage() {
         .eq('id', data.user.id)
         .single()
 
-      if (userData?.role === 'teacher') {
+      if (!userData) {
+        setError('هذا الحساب غير مكتمل التسجيل — أنشئ حساباً جديداً ببريد آخر أو تواصل مع مسؤول المنصة')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+
+      if (userData.role === 'teacher') {
         window.location.href = '/dashboard/teacher'
       } else {
         window.location.href = '/dashboard/student'

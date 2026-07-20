@@ -37,19 +37,33 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({ email, password })
 
     if (error) {
-      setError('حدث خطأ في إنشاء الحساب')
+      setError('حدث خطأ في إنشاء الحساب: ' + (error.message || ''))
+      setLoading(false)
+      return
+    }
+
+    // كشف البريد المسجل مسبقاً (Supabase لا يرجع خطأ بل مستخدماً وهمياً بلا هويات)
+    if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+      setError('هذا البريد الإلكتروني مسجَّل مسبقاً — استعمل «تسجيل الدخول» أو «نسيت كلمة المرور»')
       setLoading(false)
       return
     }
 
     if (data.user) {
-      await supabase.from('users').insert({
+      const { error: profileError } = await supabase.from('users').insert({
         id: data.user.id,
         name: name,
         role: role,
         grade_level: role === 'student' ? gradeLevel : null,
         class_id: classId
       })
+      // لا نتابع أبداً إن فشل حفظ الملف الشخصي (حتى لا يبقى حساب بلا دور)
+      if (profileError) {
+        setError('تعذر إكمال إنشاء الحساب، حاول مجدداً بعد لحظات')
+        await supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
     }
 
     setLoading(false)

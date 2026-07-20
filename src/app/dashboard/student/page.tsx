@@ -26,7 +26,8 @@ export default function StudentDashboard() {
     setUserId(session.user.id)
 
     const { data: userData } = await supabase
-      .from('users').select('name, class_id').eq('id', session.user.id).single()
+      .from('users').select('name, class_id, role').eq('id', session.user.id).single()
+    if (userData?.role === 'teacher') { window.location.href = '/dashboard/teacher'; return }
     if (userData) {
       setUserName(userData.name)
       setClassId(userData.class_id)
@@ -156,6 +157,12 @@ export default function StudentDashboard() {
           <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 16px",borderRadius:"20px",fontWeight:"bold"}}>
             ⭐ {points} نقطة
           </span>
+          <a href="/dashboard/student/community" style={{background:"#eff6ff",color:"#2563eb",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            🌐 مجتمع المعرفة
+          </a>
+          <a href="/dashboard/student/chat" style={{background:"#fefce8",color:"#ca8a04",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            💬 أستاذي
+          </a>
           <a href="/dashboard/student/attendance" style={{background:"#f0fdf4",color:"#16a34a",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             📋 غياباتي
           </a>

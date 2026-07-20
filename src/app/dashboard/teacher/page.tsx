@@ -28,6 +28,10 @@ export default function TeacherDashboard() {
 
   const loadData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { window.location.href = '/auth/login'; return }
+    // حارس الدور: هذه اللوحة للأساتذة فقط
+    const { data: roleCheck } = await supabase.from('users').select('role').eq('id', session.user.id).single()
+    if (roleCheck?.role !== 'teacher') { window.location.href = '/dashboard/student'; return }
     if (!session?.user) { setLoading(false); return }
     setTeacherId(session.user.id)
 
@@ -112,6 +116,12 @@ export default function TeacherDashboard() {
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
         <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>عربيتي — لوحة الأستاذ</h1>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <a href="/dashboard/teacher/community" style={{background:"#eff6ff",color:"#2563eb",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            🌐 مجتمع المعرفة
+          </a>
+          <a href="/dashboard/teacher/chat" style={{background:"#fefce8",color:"#ca8a04",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            💬 رسائل التلاميذ
+          </a>
           <a href="/dashboard/teacher/documents" style={{background:"#f5f3ff",color:"#7c3aed",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             📚 الوثائق التربوية
           </a>
