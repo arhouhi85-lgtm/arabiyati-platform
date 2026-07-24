@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getUpcomingEvents, daysUntil, fmtRange } from '@/lib/calendarEvents'
 import { BRAND, GRADIENTS } from '@/lib/brand'
+import { computeAllUnitsProgress } from '@/lib/completionStats'
 
 export default function StudentDashboard() {
   const [points, setPoints] = useState(0)
@@ -57,18 +58,25 @@ export default function StudentDashboard() {
     if (!joinCode.trim()) return
     setJoining(true)
 
-    const { data: foundClass } = await supabase
-      .from('classes').select('id, name').eq('join_code', joinCode.trim().toUpperCase()).single()
+    // ⚠️ لا نقرأ من جدول classes مباشرة، لأن سياسات RLS تسمح فقط
+    // للأستاذ صاحب الفصل بقراءته. نستعمل بدل ذلك دالة آمنة
+    // (security definer) مهمتها الوحيدة إيجاد الفصل من رمزه.
+    const { data: foundClassId, error: rpcError } = await supabase
+      .rpc('find_class_by_code', { code: joinCode.trim() })
 
-    if (!foundClass) {
+    if (rpcError || !foundClassId || foundClassId.length === 0) {
       setJoinError('رمز الفصل غير صحيح. تحقق منه مع أستاذك')
       setJoining(false)
       return
     }
 
-    await supabase.from('users').update({ class_id: foundClass.id }).eq('id', userId)
-    setClassId(foundClass.id)
-    setClassName(foundClass.name)
+    const foundId = foundClassId[0].class_id
+    const foundName = foundClassId[0].class_name
+
+    await supabase.from('users').update({ class_id: foundId }).eq('id', userId)
+    setClassId(foundId)
+    setClassName(foundName || 'فصلي')
+
     setShowJoinModal(false)
     setJoinCode('')
     setJoining(false)
@@ -101,6 +109,10 @@ export default function StudentDashboard() {
       .reduce((sum: number, h: any) => sum + h.points, 0)
     return { ...b, earned: subjectTotal >= b.min, subjectTotal }
   })
+
+  // تقدّمي في الوحدات — يُحسب فقط من الوحدات المزوَّدة بنصوص فعلاً،
+  // ومن السجلات المحفوظة بعد تفعيل التتبّع الدقيق (text_id)
+  const unitProgress = computeAllUnitsProgress(history)
 
   const tabs = [
     { id: 'overview', label: 'نظرة عامة', icon: '📊' },
@@ -290,6 +302,26 @@ export default function StudentDashboard() {
                 <div style={{color:"#6b7280"}}>المستوى</div>
               </div>
             </div>
+
+            {unitProgress.length > 0 && (
+              <div style={{background:"white",borderRadius:"16px",padding:"24px",marginBottom:"24px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>
+                <h3 style={{color:"#1e3a8a",fontSize:"20px",fontWeight:"bold",marginBottom:"16px"}}>تقدّمي في الوحدات 📈</h3>
+                <div style={{display:"grid",gap:"14px"}}>
+                  {unitProgress.map(u => (
+                    <div key={u.key}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px",fontSize:"13px"}}>
+                        <span style={{color:"#374151",fontWeight:"bold"}}>السنة {u.year} — الوحدة {u.unit} (القراءة)</span>
+                        <span style={{color:"#6b7280"}}>{u.completedTexts} / {u.totalTexts} نصوص</span>
+                      </div>
+                      <div style={{background:"#e5e7eb",borderRadius:"100px",height:"10px"}}>
+                        <div style={{background: u.percent===100 ? "#16a34a" : "linear-gradient(90deg,#2563eb,#1e3a8a)",
+                          borderRadius:"100px",height:"10px",width:`${u.percent}%`,transition:"width 0.5s"}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{background:"white",borderRadius:"16px",padding:"24px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>
               <h3 style={{color:"#1e3a8a",fontSize:"20px",fontWeight:"bold",marginBottom:"16px"}}>آخر الدروس</h3>

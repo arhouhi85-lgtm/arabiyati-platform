@@ -363,7 +363,8 @@ function LessonContent({text, year, unit, lesson, onBackToSelection, showBackToS
           const oldTotal = (ep||[]).filter((p:any)=>p.lesson?.includes(subjectName)).reduce((s:number,p:any)=>s+p.points,0)
           const newTotal = oldTotal+score
           await supabase.from('points').insert({user_id:session.user.id,points:score,
-            lesson:`السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${text.title})`})
+            lesson:`السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${text.title})`,
+            text_id:text.id, lesson_year:year, lesson_unit:unit})
           setSavedPoints(true)
           const badge = subjectBadges[lesson]
           if(badge && oldTotal<badge.min && newTotal>=badge.min) setNewBadge(badge)

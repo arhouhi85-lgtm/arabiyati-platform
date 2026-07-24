@@ -21,18 +21,19 @@ export default function SignupPage() {
 
     let classId = null
     if (role === 'student' && classCode.trim()) {
-      const { data: foundClass } = await supabase
-        .from('classes')
-        .select('id')
-        .eq('join_code', classCode.trim().toUpperCase())
-        .single()
+      // ⚠️ لا نقرأ من جدول classes مباشرة، لأن سياسات RLS تمنع
+      // أي شخص غير مسجَّل الدخول من رؤية أي فصل (حتى لو كان
+      // الرمز صحيحاً). بدل ذلك نستدعي دالة آمنة (security definer)
+      // مهمتها الوحيدة إيجاد الفصل من رمزه دون كشف أي بيانات أخرى.
+      const { data: foundClassId, error: rpcError } = await supabase
+        .rpc('find_class_by_code', { code: classCode.trim() })
 
-      if (!foundClass) {
+      if (rpcError || !foundClassId || foundClassId.length === 0) {
         setError('رمز الفصل غير صحيح. تحقق منه مع أستاذك')
         setLoading(false)
         return
       }
-      classId = foundClass.id
+      classId = foundClassId[0].class_id
     }
 
     const { data, error } = await supabase.auth.signUp({ email, password })
