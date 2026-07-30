@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useTeacherGuard } from '@/lib/useTeacherGuard'
 
 export default function TeacherCommunityPage() {
+  const { loading: guardLoading, teacherId, teacherName } = useTeacherGuard()
   const [loading, setLoading] = useState(true)
-  const [me, setMe] = useState<any>(null)
   const [classes, setClasses] = useState<any[]>([])
   const [selectedClass, setSelectedClass] = useState<number | null>(null)
   const [names, setNames] = useState<{[id:string]: string}>({})
@@ -16,24 +17,21 @@ export default function TeacherCommunityPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (guardLoading || !teacherId) return
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { window.location.href = '/auth/login'; return }
-      const { data: my } = await supabase.from('users').select('id, name').eq('id', session.user.id).single()
-      setMe(my)
-      const { data: cls } = await supabase.from('classes').select('id, name').eq('teacher_id', session.user.id)
+      const { data: cls } = await supabase.from('classes').select('id, name').eq('teacher_id', teacherId)
       setClasses(cls || [])
       if (cls && cls.length > 0) setSelectedClass(cls[0].id)
       setLoading(false)
     }
     init()
-  }, [])
+  }, [guardLoading, teacherId])
 
   useEffect(() => {
-    if (!selectedClass || !me) return
+    if (!selectedClass || !teacherId) return
     const loadAll = async () => {
       const { data: members } = await supabase.from('users').select('id, name').eq('class_id', selectedClass)
-      const map: {[id:string]: string} = { [me.id]: me.name }
+      const map: {[id:string]: string} = { [teacherId]: teacherName }
       ;(members || []).forEach((u: any) => { map[u.id] = u.name })
       setNames(map)
       await loadMessages()
@@ -41,7 +39,7 @@ export default function TeacherCommunityPage() {
     loadAll()
     const iv = setInterval(loadMessages, 4000)
     return () => clearInterval(iv)
-  }, [selectedClass, me])
+  }, [selectedClass, teacherId])
 
   const loadMessages = async () => {
     if (!selectedClass) return
@@ -64,7 +62,7 @@ export default function TeacherCommunityPage() {
     const content = text.trim()
     if (!content || sending || !selectedClass) return
     setSending(true)
-    await supabase.from('messages').insert({ class_id: selectedClass, sender_id: me.id, content })
+    await supabase.from('messages').insert({ class_id: selectedClass, sender_id: teacherId, content })
     setText('')
     await loadMessages()
     setSending(false)
@@ -105,7 +103,7 @@ export default function TeacherCommunityPage() {
     return `${d.getDate()}/${d.getMonth()+1} — ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`
   }
 
-  if (loading) return (
+  if (guardLoading || loading) return (
     <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
       <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
     </div>
@@ -156,7 +154,7 @@ export default function TeacherCommunityPage() {
               <p style={{textAlign:"center",color:"#9ca3af",marginTop:"40px",fontSize:"15px"}}>لا توجد رسائل بعد — افتتح النقاش برسالة ترحيب! 💬</p>
             )}
             {messages.map(m => {
-              const mine = m.sender_id === me.id
+              const mine = m.sender_id === teacherId
               return (
                 <div key={m.id} style={{maxWidth:"82%",alignSelf: mine ? "flex-start" : "flex-end"}}>
                   <div style={{

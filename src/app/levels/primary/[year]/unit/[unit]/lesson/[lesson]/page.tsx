@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { readingTexts, ReadingText } from '@/lib/readingTexts'
+import { grammarTexts, GrammarLesson } from '@/lib/grammarTexts'
 
 const subjectBadges: {[key:string]:{name:string,icon:string,color:string,min:number}} = {
   "1":{name:"قارئ متميز",icon:"📖",color:"#2563eb",min:50},
@@ -362,9 +363,16 @@ function LessonContent({text, year, unit, lesson, onBackToSelection, showBackToS
           const {data:ep} = await supabase.from('points').select('points,lesson').eq('user_id',session.user.id)
           const oldTotal = (ep||[]).filter((p:any)=>p.lesson?.includes(subjectName)).reduce((s:number,p:any)=>s+p.points,0)
           const newTotal = oldTotal+score
-          await supabase.from('points').insert({user_id:session.user.id,points:score,
-            lesson:`السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${text.title})`,
-            text_id:text.id, lesson_year:year, lesson_unit:unit})
+          // ⚠️ لا نُدخل النقاط مباشرة من المتصفّح — نستدعي دالة آمنة
+          // (security definer) تفرض حداً أقصى 100 وأدنى صفر على القيمة
+          // مهما كان الرقم المُرسَل، فلا يمكن التلاعب بها من طرف العميل.
+          await supabase.rpc('award_lesson_points', {
+            p_text_id: text.id,
+            p_lesson_year: year,
+            p_lesson_unit: unit,
+            p_score: score,
+            p_lesson_label: `السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${text.title})`,
+          })
           setSavedPoints(true)
           const badge = subjectBadges[lesson]
           if(badge && oldTotal<badge.min && newTotal>=badge.min) setNewBadge(badge)
@@ -565,6 +573,340 @@ function LessonContent({text, year, unit, lesson, onBackToSelection, showBackToS
   )
 }
 
+// ================= مكوّن دروس القواعد (الصرف/التراكيب/الإملاء) =================
+// منفصل تماماً عن LessonContent الخاص بالقراءة أعلاه — لا يعدّل فيه شيئاً.
+// يُظهر نص "ألاحظ وأكتشف" وصندوق "أستنتج" بدل النص المصوَّت والصور،
+// ويستعمل نفس مكوّنات الأسئلة (MatchQuestion, MultiQuestion, OpenQuestion).
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function GrammarLessonContent({lessonData, year, unit, lesson, onBackToSelection, showBackToSelection}: {
+  lessonData: GrammarLesson, year: string, unit: string, lesson: string,
+  onBackToSelection: () => void, showBackToSelection: boolean
+}) {
+  const [round, setRound] = useState(0) // يتغيّر عند "إعادة المحاولة" لإجبار خلط جديد للأسئلة
+  const [questions, setQuestions] = useState(() => shuffleArray(lessonData.questions))
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [qAnswers, setQAnswers] = useState<{[id:number]:{correct:boolean,attempts:number}}>({})
+  const [orderSelected, setOrderSelected] = useState<string[]>([])
+  const [blankValue, setBlankValue] = useState("")
+  const [showHint, setShowHint] = useState(false)
+  const [showStars, setShowStars] = useState(false)
+  const [newBadge, setNewBadge] = useState<any>(null)
+  const [finished, setFinished] = useState(false)
+  const [correctFlash, setCorrectFlash] = useState(false)
+  const [wrongFlash, setWrongFlash] = useState(false)
+  const [savedPoints, setSavedPoints] = useState(false)
+  const [shuffledWords, setShuffledWords] = useState<string[]>([])
+  const [shuffledOpts, setShuffledOpts] = useState<string[]>([])
+  const [a11y, setA11y] = useState({bigText:false, highContrast:false, readAloud:false})
+
+  const color = lessonColors[lesson] || "#2563eb"
+  const currentQ = questions[currentIdx]
+  const totalQ = questions.length
+
+  useEffect(() => {
+    setQuestions(shuffleArray(lessonData.questions))
+    setCurrentIdx(0)
+  }, [round, lessonData])
+
+  // القراءة الصوتية: عند تفعيلها (أو عند تغيير الدرس)، تُقرأ رأسية الدرس
+  // كاملة (الملاحظة + القاعدة) مرة واحدة، ثم يُقرأ كل سؤال عند الوصول إليه
+  useEffect(() => {
+    if (a11y.readAloud) {
+      const fullHeader = `${lessonData.observationText}. أستنتج: ${lessonData.ruleBox.join('. ')}`
+      const u = new SpeechSynthesisUtterance(fullHeader)
+      u.lang = 'ar'
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(u)
+    }
+  }, [a11y.readAloud, round, lessonData])
+
+  useEffect(() => {
+    if (a11y.readAloud && currentQ) {
+      const u = new SpeechSynthesisUtterance(currentQ.question)
+      u.lang = 'ar'
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(u)
+    }
+  }, [currentIdx, a11y.readAloud])
+
+  useEffect(() => {
+    if(currentQ?.type==="order") setShuffledWords(shuffleArray([...(currentQ as any).words]))
+    if(currentQ?.type==="mcq" || currentQ?.type==="multi") setShuffledOpts(shuffleArray([...(currentQ as any).options]))
+    setBlankValue(""); setOrderSelected([]); setShowHint(false)
+  }, [currentIdx, currentQ])
+
+  const handleCorrect = () => {
+    playClap(); setCorrectFlash(true); setTimeout(()=>setCorrectFlash(false), 800)
+    const newAnswers = {...qAnswers, [currentQ.id]:{correct:true,attempts:(qAnswers[currentQ.id]?.attempts||0)+1}}
+    setQAnswers(newAnswers)
+    setTimeout(()=>{
+      if(currentIdx < totalQ-1) setCurrentIdx(i=>i+1)
+      else finishLesson(newAnswers)
+    }, 1200)
+  }
+
+  const handleWrong = () => {
+    setWrongFlash(true); setTimeout(()=>setWrongFlash(false), 600)
+    const attempts = (qAnswers[currentQ.id]?.attempts||0)+1
+    setQAnswers(prev=>({...prev,[currentQ.id]:{correct:false,attempts}}))
+    if(attempts >= 2) setShowHint(true)
+  }
+
+  const finishLesson = async (answers: any) => {
+    const correctCount = Object.values(answers).filter((a:any)=>a.correct).length
+    const score = Math.round((correctCount/totalQ)*100)
+    setFinished(true)
+    if(score>=60){ setShowStars(true); setTimeout(()=>setShowStars(false),2500) }
+    if(!savedPoints) {
+      try {
+        const {data:{session}} = await supabase.auth.getSession()
+        if(session?.user){
+          const subjectName = lessonNames[lesson]
+          const {data:ep} = await supabase.from('points').select('points,lesson').eq('user_id',session.user.id)
+          const oldTotal = (ep||[]).filter((p:any)=>p.lesson?.includes(subjectName)).reduce((s:number,p:any)=>s+p.points,0)
+          const newTotal = oldTotal+score
+          // نفس الدالة الآمنة المستعملة في دروس القراءة — تفرض حداً 0-100
+          await supabase.rpc('award_lesson_points', {
+            p_text_id: lessonData.id,
+            p_lesson_year: year,
+            p_lesson_unit: unit,
+            p_score: score,
+            p_lesson_label: `السنة ${yearNames[year]} - الوحدة ${unitNames[unit]} - ${subjectName} (${lessonData.title})`,
+          })
+          setSavedPoints(true)
+          const badge = subjectBadges[lesson]
+          if(badge && oldTotal<badge.min && newTotal>=badge.min) setNewBadge(badge)
+        }
+      } catch(e){console.error(e)}
+    }
+  }
+
+  const restartLesson = () => {
+    setQAnswers({}); setOrderSelected([]); setBlankValue("")
+    setShowHint(false); setFinished(false); setShowStars(false); setSavedPoints(false)
+    setRound(r=>r+1) // يُجبر خلط ترتيب الأسئلة من جديد
+  }
+
+  if (!currentQ) return null
+
+  const bgMain = a11y.highContrast ? "#000000" : "linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)"
+  const cardBg = a11y.highContrast ? "#111827" : "white"
+  const headerTextColor = a11y.highContrast ? "#f9fafb" : "#1e293b"
+  // مقياس موحّد: عند تفعيل "قراءة مريحة" يكبر كل نص في الدرس، لا سؤال واحد فقط
+  const bf = (normal: number, big: number) => a11y.bigText ? `${big}px` : `${normal}px`
+  const questionFontSize = bf(17, 30)
+  const headerFontSize = bf(17, 30)
+  const titleFontSize = bf(22, 30)
+  const subLabelFontSize = bf(13, 20)
+  const ruleLabelFontSize = bf(14, 24)
+  const ruleItemFontSize = bf(15, 28)
+  const badgeFontSize = bf(13, 20)
+  const smallBadgeFontSize = bf(12, 18)
+  const optionFontSize = bf(15, 26)
+  const hintFontSize = bf(14, 22)
+  const correctMsgFontSize = bf(16, 26)
+  const buttonFontSize = bf(15, 22)
+  const resultTitleFontSize = bf(28, 34)
+  const resultTextFontSize = bf(16, 24)
+
+  return (
+    <main dir="rtl" style={{minHeight:"100vh",background:bgMain,fontFamily:"Arial",transition:"background 0.3s"}}>
+      {showStars && (
+        <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',pointerEvents:'none',zIndex:9999}}>
+          {Array.from({length:15}).map((_,i)=>(
+            <div key={i} style={{position:'absolute',left:`${5+Math.random()*90}%`,top:`${10+Math.random()*50}%`,
+              fontSize:`${18+Math.random()*20}px`,opacity:0,animation:`star 1.5s ease-out forwards`,animationDelay:`${i*0.08}s`}}>
+              {['⭐','🌟','✨','🎉','💫'][i%5]}
+            </div>
+          ))}
+          <style>{`@keyframes star{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-300px) rotate(30deg) scale(0.2);opacity:0}}`}</style>
+        </div>
+      )}
+      {newBadge && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
+          <div style={{background:"white",borderRadius:"24px",padding:"40px",textAlign:"center",maxWidth:"360px"}}>
+            <div style={{fontSize:"80px",marginBottom:"12px"}}>{newBadge.icon}</div>
+            <h2 style={{color:"#ca8a04",fontSize:"24px",fontWeight:"bold",marginBottom:"8px"}}>🎉 شارة جديدة!</h2>
+            <p style={{color:newBadge.color,fontSize:"22px",fontWeight:"bold",marginBottom:"24px"}}>{newBadge.name}</p>
+            <button onClick={()=>setNewBadge(null)} style={{background:newBadge.color,color:"white",border:"none",padding:"12px 32px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:"16px"}}>رائع! 🎊</button>
+          </div>
+        </div>
+      )}
+
+      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)",flexWrap:"wrap",gap:"8px"}}>
+        <h1 style={{color:color,fontSize:"22px",fontWeight:"bold",margin:0}}>{lessonNames[lesson]} — {lessonData.title}</h1>
+        <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+          <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"14px"}}>السنة {yearNames[year]} — الوحدة {unitNames[unit]}</span>
+          {showBackToSelection && (
+            <button onClick={onBackToSelection} style={{color:"#1e40af",background:"#dbeafe",border:"none",fontWeight:"bold",padding:"8px 14px",borderRadius:"8px",cursor:"pointer",fontSize:"14px"}}>📚 درس آخر</button>
+          )}
+          <a href={`/levels/primary/${year}/unit/${unit}`} style={{color:"#6b7280",textDecoration:"none",fontWeight:"bold",background:"#f3f4f6",padding:"8px 14px",borderRadius:"8px"}}>رجوع</a>
+        </div>
+      </nav>
+
+      <div style={{maxWidth:"900px",margin:"0 auto",padding:"24px"}}>
+        <AccessibilityBar settings={a11y} setSettings={setA11y} />
+
+        {/* رأسية الدرس: ألاحظ وأكتشف + أستنتج (بدل النص المصوَّت في دروس القراءة) */}
+        <div style={{background:cardBg,borderRadius:"16px",padding:"24px",marginBottom:"20px",borderRight:`5px solid ${color}`,boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+          <h2 style={{color: a11y.highContrast ? "#fbbf24" : "#1e3a8a",fontSize: titleFontSize,fontWeight:"bold",marginBottom:"4px",textAlign:"center"}}>{lessonData.title}</h2>
+          <p style={{color: a11y.highContrast ? "#d1d5db" : "#6b7280",textAlign:"center",marginBottom:"18px",fontSize:subLabelFontSize}}>{lessonData.domain} — {lessonData.weekLabel}</p>
+
+          <div style={{background: a11y.highContrast ? "#1f2937" : "#f8fafc",borderRadius:"12px",padding:"16px",marginBottom:"16px"}}>
+            <p style={{color:headerTextColor,fontSize:headerFontSize,lineHeight:"2.4",textAlign:"justify",margin:0}}>
+              🔎 {lessonData.observationText}
+            </p>
+          </div>
+
+          <div style={{background: a11y.highContrast ? "#3f2d0a" : "#fef9c3",border:"1px solid #fbbf24",borderRadius:"12px",padding:"16px"}}>
+            <p style={{color: a11y.highContrast ? "#fbbf24" : "#92400e",fontWeight:"bold",fontSize: ruleLabelFontSize,margin:"0 0 8px"}}>📌 أستنتج:</p>
+            {lessonData.ruleBox.map((rule, i) => (
+              <p key={i} style={{color: a11y.highContrast ? "#fde68a" : "#78350f",fontSize: ruleItemFontSize,lineHeight:"2",margin:"0 0 6px"}}>- {rule}</p>
+            ))}
+          </div>
+        </div>
+
+        {!finished ? (
+          <div style={{background:cardBg,borderRadius:"16px",padding:"24px",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px",flexWrap:"wrap",gap:"8px"}}>
+              <div>
+                <span style={{background:currentQ.color,color:"white",padding:"4px 14px",borderRadius:"20px",fontSize:badgeFontSize,fontWeight:"bold"}}>{(currentQ as any).section}</span>
+                <span style={{marginRight:"10px",fontWeight:"bold",color: a11y.highContrast ? "#f9fafb" : "#1e3a8a",fontSize:badgeFontSize}}>السؤال {currentIdx+1} من {totalQ}</span>
+              </div>
+              <span style={{background:"#f0fdf4",color:"#16a34a",padding:"4px 12px",borderRadius:"20px",fontWeight:"bold",fontSize:badgeFontSize}}>
+                ✅ {Object.values(qAnswers).filter((a:any)=>a.correct).length} صحيح
+              </span>
+            </div>
+            <div style={{background:"#e5e7eb",borderRadius:"100px",height:"8px",marginBottom:"20px"}}>
+              <div style={{background:`linear-gradient(90deg,${color},#1e3a8a)`,borderRadius:"100px",height:"8px",width:`${Math.round((currentIdx/totalQ)*100)}%`,transition:"width 0.5s"}}/>
+            </div>
+
+            <div style={{padding:"20px",border:`2px solid ${correctFlash?"#22c55e":wrongFlash?"#ef4444":currentQ.color+"40"}`,
+              borderRadius:"16px",background:correctFlash?"#f0fdf4":wrongFlash?"#fef2f2":cardBg,transition:"all 0.3s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"16px"}}>
+                <span style={{fontSize:"22px"}}>{currentQ.icon}</span>
+                <span style={{background:currentQ.color+"20",color:currentQ.color,padding:"3px 12px",borderRadius:"20px",fontSize:smallBadgeFontSize,fontWeight:"bold"}}>
+                  {currentQ.type==="mcq"?"اختيار من متعدد":currentQ.type==="multi"?"اختيار متعدد الإجابات":currentQ.type==="blank"?"ملء الفراغ":currentQ.type==="match"?"وصل":currentQ.type==="open"?"كتابة حرة":"ترتيب الكلمات"}
+                </span>
+              </div>
+              <p style={{color:headerTextColor,fontSize:questionFontSize,fontWeight:"bold",marginBottom:"16px",lineHeight:"1.8"}}>{currentQ.question}</p>
+
+              {currentQ.type==="mcq" && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:"10px"}}>
+                  {shuffledOpts.map((opt:string)=>(
+                    <button key={opt} onClick={()=>{
+                      if(qAnswers[currentQ.id]?.correct) return
+                      if(opt===(currentQ as any).correct) handleCorrect(); else handleWrong()
+                    }} style={{padding:"14px 18px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:optionFontSize,textAlign:"right",border:`2px solid ${currentQ.color}40`,background: a11y.highContrast ? "#1f2937" : "white",color:headerTextColor}}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {currentQ.type==="multi" && <MultiQuestion key={`${round}-${currentQ.id}`} q={currentQ} onCorrect={handleCorrect} onWrong={handleWrong}/>}
+              {currentQ.type==="match" && <MatchQuestion key={`${round}-${currentQ.id}`} q={currentQ} onCorrect={handleCorrect} onWrong={handleWrong}/>}
+              {currentQ.type==="open" && <OpenQuestion key={`${round}-${currentQ.id}`} q={currentQ} onDone={handleCorrect}/>}
+
+              {currentQ.type==="blank" && (
+                <div>
+                  <input value={blankValue} onChange={e=>setBlankValue(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter"){ const ans=blankValue.trim(); const correct=(currentQ as any).correct
+                      if(ans===correct||correct.includes(ans)) handleCorrect(); else handleWrong() }}}
+                    placeholder="اكتب الإجابة هنا..."
+                    style={{width:"100%",padding:"14px",borderRadius:"10px",border:`2px solid ${currentQ.color}60`,fontSize:optionFontSize,fontFamily:"Arial",direction:"rtl",marginBottom:"12px",outline:"none",background: a11y.highContrast ? "#1f2937" : "#f9fafb",color:headerTextColor}}/>
+                  <button onClick={()=>{ const ans=blankValue.trim(); const correct=(currentQ as any).correct
+                    if(ans===correct||correct.includes(ans)) handleCorrect(); else handleWrong() }}
+                    style={{background:currentQ.color,color:"white",border:"none",padding:"12px 28px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>تأكيد ✓</button>
+                </div>
+              )}
+
+              {currentQ.type==="order" && (
+                <div>
+                  <p style={{fontSize:subLabelFontSize,color: a11y.highContrast ? "#d1d5db" : "#6b7280",marginBottom:"8px"}}>اضغط على الكلمات بالترتيب الصحيح:</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"8px",marginBottom:"12px"}}>
+                    {shuffledWords.map((word,i)=>(
+                      <button key={i} onClick={()=>{
+                        if(orderSelected.includes(word)) setOrderSelected(prev=>prev.filter(w=>w!==word))
+                        else setOrderSelected(prev=>[...prev,word])
+                      }} style={{padding:"10px 18px",borderRadius:"8px",border:`2px solid ${orderSelected.includes(word)?currentQ.color:"#e5e7eb"}`,
+                        background:orderSelected.includes(word)?currentQ.color:(a11y.highContrast ? "#1f2937" : "white"),color:orderSelected.includes(word)?"white":headerTextColor,cursor:"pointer",fontWeight:"bold",fontSize:optionFontSize}}>
+                        {word}
+                      </button>
+                    ))}
+                  </div>
+                  {orderSelected.length>0 && (
+                    <div style={{border:"1px dashed #9ca3af",borderRadius:"10px",padding:"12px",marginBottom:"12px",display:"flex",flexWrap:"wrap",gap:"6px",minHeight:"48px"}}>
+                      {orderSelected.map((w,i)=>(<span key={i} style={{background:"#dbeafe",color:"#1d4ed8",padding:"6px 14px",borderRadius:"6px",fontWeight:"bold",fontSize:optionFontSize}}>{w}</span>))}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:"10px"}}>
+                    <button onClick={()=>{
+                      const correct=(currentQ as any).correct as string[]
+                      if(JSON.stringify(orderSelected)===JSON.stringify(correct)) handleCorrect()
+                      else{handleWrong();setOrderSelected([])}
+                    }} style={{background:currentQ.color,color:"white",border:"none",padding:"12px 28px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>تأكيد ✓</button>
+                    <button onClick={()=>setOrderSelected([])} style={{background:"#f3f4f6",color:"#6b7280",border:"none",padding:"12px 20px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>مسح 🗑️</button>
+                  </div>
+                </div>
+              )}
+
+              {showHint && currentQ.type!=="open" && (
+                <div style={{marginTop:"16px",background:"#fef9c3",border:"1px solid #fbbf24",borderRadius:"10px",padding:"12px",fontSize:hintFontSize,color:"#92400e"}}>
+                  💡 {(currentQ as any).hint}
+                </div>
+              )}
+
+              {qAnswers[currentQ.id]?.correct && currentQ.type!=="open" && (
+                <div style={{marginTop:"16px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"10px",padding:"12px",textAlign:"center",fontSize:correctMsgFontSize,color:"#15803d",fontWeight:"bold"}}>
+                  🎉 أحسنت! إجابة صحيحة!
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{background:cardBg,borderRadius:"16px",padding:"32px",boxShadow:"0 4px 16px rgba(0,0,0,0.08)",textAlign:"center"}}>
+            {(()=>{
+              const correct=Object.values(qAnswers).filter((a:any)=>a.correct).length
+              const score=Math.round((correct/totalQ)*100)
+              return (
+                <>
+                  <div style={{fontSize:"64px",marginBottom:"12px"}}>{score===100?"🏆":score>=75?"🌟":score>=50?"👍":"💪"}</div>
+                  <h3 style={{color:score>=60?"#16a34a":"#dc2626",fontSize:resultTitleFontSize,fontWeight:"bold",marginBottom:"8px"}}>{correct} / {totalQ} نشاط مكتمل</h3>
+                  <div style={{background: a11y.highContrast ? "#1f2937" : "#f3f4f6",borderRadius:"12px",padding:"12px",marginBottom:"16px",display:"inline-block"}}>
+                    <span style={{fontSize:resultTitleFontSize,fontWeight:"bold",color:score>=60?"#16a34a":"#dc2626"}}>{score}</span>
+                    <span style={{color: a11y.highContrast ? "#d1d5db" : "#6b7280",fontSize:resultTextFontSize}}> / 100 نقطة</span>
+                  </div>
+                  <p style={{color: a11y.highContrast ? "#d1d5db" : "#6b7280",fontSize:resultTextFontSize,marginBottom:"24px"}}>
+                    {score===100?`ممتاز! أكملت كل الأنشطة الـ ${totalQ}! 🌟`:"جيد! استمر في التقدم! 👍"}
+                  </p>
+                  <div style={{display:"flex",gap:"12px",justifyContent:"center",flexWrap:"wrap"}}>
+                    <button onClick={restartLesson} style={{background:"#2563eb",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>🔄 إعادة المحاولة (بترتيب جديد)</button>
+                    {showBackToSelection && (
+                      <button onClick={onBackToSelection} style={{background:"#16a34a",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>📚 درس آخر</button>
+                    )}
+                    <a href={`/levels/primary/${year}/unit/${unit}`}>
+                      <button style={{background:"#6b7280",color:"white",border:"none",padding:"14px 24px",borderRadius:"10px",cursor:"pointer",fontWeight:"bold",fontSize:buttonFontSize}}>العودة</button>
+                    </a>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
+
 // ================= الصفحة الرئيسية للدرس =================
 export default function LessonPage() {
   const params = useParams()
@@ -587,6 +929,59 @@ export default function LessonPage() {
       <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
     </div>
   )
+
+  // ===== دروس القواعد: الصرف (2) والتراكيب (3) والإملاء (4) =====
+  // مسار منفصل تماماً عن منطق القراءة أدناه — لا يتقاطع معه إطلاقاً.
+  if (lesson === "2" || lesson === "3" || lesson === "4") {
+    const grammarLessons: GrammarLesson[] = (grammarTexts[`${year}-${unit}`] || [])
+      .filter(l => l.component === lesson)
+    const selectedGrammar = grammarLessons.find(l => l.id === selectedId) || null
+
+    if (grammarLessons.length === 0) return (
+      <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:"64px",marginBottom:"16px"}}>🚧</div>
+          <p style={{fontSize:"20px",color:"#6b7280"}}>هذا الدرس قيد التطوير</p>
+          <a href={`/levels/primary/${year}/unit/${unit}`}>
+            <button style={{background:color,color:"white",border:"none",padding:"12px 24px",borderRadius:"8px",cursor:"pointer",marginTop:"16px",fontSize:"16px",fontWeight:"bold"}}>العودة</button>
+          </a>
+        </div>
+      </main>
+    )
+
+    if (grammarLessons.length === 1) return (
+      <GrammarLessonContent key={grammarLessons[0].id} lessonData={grammarLessons[0]} year={year} unit={unit} lesson={lesson}
+        onBackToSelection={()=>{}} showBackToSelection={false} />
+    )
+
+    if (selectedGrammar) return (
+      <GrammarLessonContent key={selectedGrammar.id} lessonData={selectedGrammar} year={year} unit={unit} lesson={lesson}
+        onBackToSelection={()=>setSelectedId(null)} showBackToSelection={true} />
+    )
+
+    // شاشة اختيار الدرس (عند تعدّد دروس نفس المكوّن في نفس الوحدة)
+    return (
+      <main dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)",fontFamily:"Arial"}}>
+        <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
+          <h1 style={{color:color,fontSize:"22px",fontWeight:"bold",margin:0}}>{lessonNames[lesson]} — اختر الدرس</h1>
+          <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+            <span style={{background:"#fef9c3",color:"#ca8a04",padding:"6px 14px",borderRadius:"20px",fontWeight:"bold",fontSize:"14px"}}>السنة {yearNames[year]} — الوحدة {unitNames[unit]}</span>
+            <a href={`/levels/primary/${year}/unit/${unit}`} style={{color:"#6b7280",textDecoration:"none",fontWeight:"bold",background:"#f3f4f6",padding:"8px 14px",borderRadius:"8px"}}>رجوع</a>
+          </div>
+        </nav>
+        <div style={{maxWidth:"900px",margin:"0 auto",padding:"32px 24px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"20px"}}>
+            {grammarLessons.map(l => (
+              <div key={l.id} onClick={()=>setSelectedId(l.id)} style={{background:"white",borderRadius:"16px",padding:"20px",boxShadow:"0 4px 16px rgba(0,0,0,0.1)",cursor:"pointer",textAlign:"center"}}>
+                <h3 style={{color:"#1e3a8a",fontSize:"18px",fontWeight:"bold",margin:0}}>{l.title}</h3>
+                <p style={{color:"#6b7280",fontSize:"13px",margin:"8px 0 0"}}>{l.weekLabel}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   // لا توجد نصوص لهذا الدرس بعد
   if(texts.length === 0) return (

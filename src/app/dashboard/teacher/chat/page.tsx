@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useTeacherGuard } from '@/lib/useTeacherGuard'
 
 export default function TeacherChatPage() {
+  const { loading: guardLoading, teacherId } = useTeacherGuard()
   const [loading, setLoading] = useState(true)
-  const [me, setMe] = useState<any>(null)
   const [classes, setClasses] = useState<any[]>([])
   const [selectedClass, setSelectedClass] = useState<number | null>(null)
   const [students, setStudents] = useState<any[]>([])
@@ -16,22 +17,19 @@ export default function TeacherChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (guardLoading || !teacherId) return
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { window.location.href = '/auth/login'; return }
-      const { data: my } = await supabase.from('users').select('id, name').eq('id', session.user.id).single()
-      setMe(my)
-      const { data: cls } = await supabase.from('classes').select('id, name').eq('teacher_id', session.user.id)
+      const { data: cls } = await supabase.from('classes').select('id, name').eq('teacher_id', teacherId)
       setClasses(cls || [])
       if (cls && cls.length > 0) setSelectedClass(cls[0].id)
       setLoading(false)
     }
     init()
-  }, [])
+  }, [guardLoading, teacherId])
 
   // تحميل التلاميذ وآخر رسالة من كل محادثة
   useEffect(() => {
-    if (!selectedClass || !me) return
+    if (!selectedClass || !teacherId) return
     setActiveStudent(null)
     const load = async () => {
       const { data: studs } = await supabase.from('users').select('id, name').eq('class_id', selectedClass).order('name')
@@ -46,23 +44,23 @@ export default function TeacherChatPage() {
         .limit(300)
       const map: {[sid:string]: any} = {}
       ;(privMsgs || []).forEach((m: any) => {
-        const sid = m.sender_id === me.id ? m.recipient_id : m.sender_id
+        const sid = m.sender_id === teacherId ? m.recipient_id : m.sender_id
         if (!map[sid]) map[sid] = m
       })
       setLastMsgs(map)
     }
     load()
-  }, [selectedClass, me])
+  }, [selectedClass, teacherId])
 
   const loadThread = async (student: any) => {
-    if (!selectedClass || !me) return
+    if (!selectedClass || !teacherId) return
     const { data } = await supabase
       .from('messages')
       .select('id, created_at, sender_id, content')
       .eq('class_id', selectedClass)
       .eq('deleted', false)
       .not('recipient_id', 'is', null)
-      .or(`and(sender_id.eq.${student.id},recipient_id.eq.${me.id}),and(sender_id.eq.${me.id},recipient_id.eq.${student.id})`)
+      .or(`and(sender_id.eq.${student.id},recipient_id.eq.${teacherId}),and(sender_id.eq.${teacherId},recipient_id.eq.${student.id})`)
       .order('created_at', { ascending: true })
       .limit(150)
     setMessages(data || [])
@@ -82,7 +80,7 @@ export default function TeacherChatPage() {
     if (!content || sending || !activeStudent) return
     setSending(true)
     await supabase.from('messages').insert({
-      class_id: selectedClass, sender_id: me.id, recipient_id: activeStudent.id, content
+      class_id: selectedClass, sender_id: teacherId, recipient_id: activeStudent.id, content
     })
     setText('')
     await loadThread(activeStudent)
@@ -94,7 +92,7 @@ export default function TeacherChatPage() {
     return `${d.getDate()}/${d.getMonth()+1} — ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`
   }
 
-  if (loading) return (
+  if (guardLoading || loading) return (
     <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
       <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
     </div>
@@ -117,7 +115,7 @@ export default function TeacherChatPage() {
           <p style={{textAlign:"center",color:"#9ca3af",marginTop:"40px",fontSize:"15px"}}>لا توجد رسائل بعد مع هذا التلميذ</p>
         )}
         {messages.map(m => {
-          const mine = m.sender_id === me.id
+          const mine = m.sender_id === teacherId
           return (
             <div key={m.id} style={{maxWidth:"78%",alignSelf: mine ? "flex-start" : "flex-end"}}>
               <div style={{
@@ -186,7 +184,7 @@ export default function TeacherChatPage() {
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:"bold",color:"#1e293b",fontSize:"15px"}}>{s.name}</div>
                     <div style={{color:"#9ca3af",fontSize:"12.5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                      {last ? (last.sender_id === me.id ? "أنت: " : "") + last.content : "لا رسائل بعد — اضغط لبدء محادثة"}
+                      {last ? (last.sender_id === teacherId ? "أنت: " : "") + last.content : "لا رسائل بعد — اضغط لبدء محادثة"}
                     </div>
                   </div>
                   <span style={{color:"#9ca3af",fontSize:"11px",flexShrink:0}}>{last ? fmtTime(last.created_at) : ""}</span>

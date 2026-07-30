@@ -1,4 +1,5 @@
 'use client'
+import { useTeacherGuard } from '@/lib/useTeacherGuard'
 
 const DOCS = [
   { id:"teacher-card", title:"بطاقة الأستاذ(ة)", icon:"👤", desc:"المعلومات الشخصية والإدارية والمهنية والشواهد الجامعية" },
@@ -25,6 +26,14 @@ const UPCOMING = [
 ]
 
 export default function DocumentsHubPage() {
+  const { loading } = useTeacherGuard()
+
+  if (loading) return (
+    <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
+      <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
+    </div>
+  )
+
   return (
     <main dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)",fontFamily:"Arial"}}>
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",flexWrap:"wrap",gap:"8px"}}>

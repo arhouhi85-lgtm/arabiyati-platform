@@ -2,10 +2,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getUpcomingEvents, daysUntil, fmtDate, fmtRange, TYPE_LABELS, TYPE_COLORS, CalendarEvent } from '@/lib/calendarEvents'
+import { useTeacherGuard } from '@/lib/useTeacherGuard'
 
 export default function TeacherAgendaPage() {
+  const { loading: guardLoading, teacherId } = useTeacherGuard()
   const [loading, setLoading] = useState(true)
-  const [me, setMe] = useState<any>(null)
   const [notes, setNotes] = useState<any[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [noteDate, setNoteDate] = useState('')
@@ -14,36 +15,34 @@ export default function TeacherAgendaPage() {
   const [filter, setFilter] = useState<'all'|'holiday'|'exam'|'day'|'note'>('all')
 
   useEffect(() => {
+    if (guardLoading || !teacherId) return
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { window.location.href = '/auth/login'; return }
-      setMe(session.user)
-      await loadNotes(session.user.id)
+      await loadNotes(teacherId)
       setLoading(false)
     }
     init()
-  }, [])
+  }, [guardLoading, teacherId])
 
-  const loadNotes = async (teacherId: string) => {
-    const { data } = await supabase.from('teacher_notes').select('*').eq('teacher_id', teacherId).order('date')
+  const loadNotes = async (tId: string) => {
+    const { data } = await supabase.from('teacher_notes').select('*').eq('teacher_id', tId).order('date')
     setNotes(data || [])
   }
 
   const addNote = async () => {
-    if (!noteDate || !noteTitle.trim() || !me) return
+    if (!noteDate || !noteTitle.trim() || !teacherId) return
     setSaving(true)
-    await supabase.from('teacher_notes').insert({ teacher_id: me.id, date: noteDate, title: noteTitle.trim() })
+    await supabase.from('teacher_notes').insert({ teacher_id: teacherId, date: noteDate, title: noteTitle.trim() })
     setNoteDate(''); setNoteTitle(''); setShowAdd(false)
-    await loadNotes(me.id)
+    await loadNotes(teacherId)
     setSaving(false)
   }
 
   const deleteNote = async (id: number) => {
     await supabase.from('teacher_notes').delete().eq('id', id)
-    await loadNotes(me.id)
+    await loadNotes(teacherId)
   }
 
-  if (loading) return (
+  if (guardLoading || loading) return (
     <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
       <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
     </div>

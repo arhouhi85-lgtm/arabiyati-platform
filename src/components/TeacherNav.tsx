@@ -24,6 +24,8 @@ type NavKey =
   | 'roster'
   | 'attendance'
   | 'leaderboard'
+  | 'projector'
+  | 'jadhada'
 
 const LINKS: { key: NavKey; href: string; label: string; bg: string; color: string }[] = [
   { key: 'home',        href: '/dashboard/teacher',              label: '🏠 لوحتي',           bg: '#eef2ff', color: '#4f46e5' },
@@ -34,6 +36,8 @@ const LINKS: { key: NavKey; href: string; label: string; bg: string; color: stri
   { key: 'roster',      href: '/dashboard/teacher/roster',       label: '👥 لائحة القسم',     bg: '#f5efe3', color: '#B08D51' },
   { key: 'attendance',  href: '/dashboard/teacher/attendance',   label: '📋 سجل الغياب',      bg: '#f0fdf4', color: '#16a34a' },
   { key: 'leaderboard', href: '/dashboard/teacher/leaderboard',  label: '🏆 لوحة الصدارة',    bg: '#fef9c3', color: '#ca8a04' },
+  { key: 'projector',   href: '/dashboard/teacher/projector',    label: '🖥️ عرض بالمسلاط',    bg: '#eef2ff', color: '#0F3D73' },
+  { key: 'jadhada',     href: '/dashboard/teacher/jadhada',      label: '📄 منشئ الجذاذات',   bg: '#f0fdfa', color: '#0f766e' },
 ]
 
 export default function TeacherNav({ active }: { active?: NavKey }) {

@@ -54,6 +54,12 @@ export default function TeacherDashboard() {
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null)
 
+  // ---------- الحضور الحيّ ----------
+  const [presence, setPresence] = useState<{status:string; message:string; link_path:string; updated_at:string} | null>(null)
+  const [presenceMsg, setPresenceMsg] = useState('')
+  const [presenceLink, setPresenceLink] = useState('')
+  const [presenceLoading, setPresenceLoading] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
@@ -188,6 +194,65 @@ export default function TeacherDashboard() {
     setSelectedClassId(classId)
     setSelectedGrade(grade || '')
     setScreen('detail')
+  }
+
+  // تحميل حالة الحضور عند فتح تفاصيل فصل
+  useEffect(() => {
+    if (screen !== 'detail' || !selectedClassId) { setPresence(null); return }
+    const loadPresence = async () => {
+      const { data } = await supabase
+        .from('class_presence')
+        .select('status, message, link_path, updated_at')
+        .eq('class_id', selectedClassId)
+        .maybeSingle()
+      setPresence(data || null)
+      setPresenceMsg(data?.message || '')
+      setPresenceLink(data?.link_path || '')
+    }
+    loadPresence()
+  }, [screen, selectedClassId])
+
+  const PRESENCE_VALID_MINUTES = 30
+  const isPresenceLive = (p: typeof presence) => {
+    if (!p || p.status !== 'online') return false
+    const ageMinutes = (Date.now() - new Date(p.updated_at).getTime()) / 60000
+    return ageMinutes < PRESENCE_VALID_MINUTES
+  }
+
+  const broadcastPresence = async () => {
+    if (!selectedClassId || !teacherId) return
+    setPresenceLoading(true)
+    const { data } = await supabase
+      .from('class_presence')
+      .upsert({
+        class_id: selectedClassId,
+        teacher_id: teacherId,
+        status: 'online',
+        message: presenceMsg.trim() || null,
+        link_path: presenceLink.trim() || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'class_id' })
+      .select('status, message, link_path, updated_at')
+      .single()
+    setPresence(data || null)
+    setPresenceLoading(false)
+  }
+
+  const stopPresence = async () => {
+    if (!selectedClassId || !teacherId) return
+    setPresenceLoading(true)
+    const { data } = await supabase
+      .from('class_presence')
+      .upsert({
+        class_id: selectedClassId,
+        teacher_id: teacherId,
+        status: 'offline',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'class_id' })
+      .select('status, message, link_path, updated_at')
+      .single()
+    setPresence(data || null)
+    setPresenceLoading(false)
   }
 
   if (loading) return (
@@ -440,7 +505,47 @@ export default function TeacherDashboard() {
                         )}
                       </div>
 
-                      {/* إحصائيات الفصل */}
+                      {/* الحضور الحيّ */}
+                      <div style={{
+                        background: isPresenceLive(presence) ? "#f0fdf4" : "white",
+                        border: isPresenceLive(presence) ? "2px solid #16a34a" : "1px solid #e5e7eb",
+                        borderRadius:"16px", padding:"18px 20px", marginBottom:"18px",
+                        boxShadow:"0 2px 10px rgba(0,0,0,0.06)"
+                      }}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"10px",marginBottom: isPresenceLive(presence) ? "12px" : "0"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                            <span style={{fontSize:"20px"}}>{isPresenceLive(presence) ? "🟢" : "⚪"}</span>
+                            <span style={{fontWeight:"bold",color:"#1e293b",fontSize:"15px"}}>
+                              {isPresenceLive(presence) ? "أنت الآن حاضر — يراك تلاميذك" : "الحضور الحيّ"}
+                            </span>
+                          </div>
+                          {isPresenceLive(presence) ? (
+                            <button onClick={stopPresence} disabled={presenceLoading}
+                              style={{background:"#fee2e2",color:"#dc2626",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontWeight:"bold",fontSize:"13px"}}>
+                              {presenceLoading ? "..." : "إنهاء الحضور"}
+                            </button>
+                          ) : (
+                            <button onClick={broadcastPresence} disabled={presenceLoading}
+                              style={{background:"#16a34a",color:"white",border:"none",padding:"8px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"bold",fontSize:"13px"}}>
+                              {presenceLoading ? "..." : "🟢 أنا حاضر الآن"}
+                            </button>
+                          )}
+                        </div>
+
+                        {!isPresenceLive(presence) && (
+                          <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginTop:"12px"}}>
+                            <input value={presenceMsg} onChange={e=>setPresenceMsg(e.target.value)}
+                              placeholder="رسالة اختيارية للتلاميذ (مثلاً: توجّهوا لدرس القراءة الآن)"
+                              style={{flex:"2",minWidth:"200px",padding:"9px 12px",borderRadius:"8px",border:"1px solid #e5e7eb",fontSize:"13px",direction:"rtl"}}/>
+                          </div>
+                        )}
+
+                        {isPresenceLive(presence) && presence?.message && (
+                          <p style={{color:"#166534",fontSize:"14px",margin:0,background:"white",borderRadius:"8px",padding:"8px 12px"}}>
+                            💬 {presence.message}
+                          </p>
+                        )}
+                      </div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"14px",marginBottom:"20px"}}>
                         <div style={{background:"white",borderRadius:"14px",padding:"18px",textAlign:"center",boxShadow:"0 4px 12px rgba(0,0,0,0.08)"}}>
                           <div style={{fontSize:"30px",marginBottom:"6px"}}>👨‍🎓</div>

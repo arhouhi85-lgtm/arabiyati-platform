@@ -25,6 +25,10 @@ export default function UnitPage() {
     { id: 6, title: "التواصل الشفهي", icon: "🗣️", color: "#be185d", bg: "#fce7f3" },
   ]
 
+  // حصة مستقلة بذاتها في الجدول الزمني — بطاقة مميّزة بصرياً، ومسار مستقل
+  // (لا تُذاب تمارينها داخل مكوّنات الصرف/الإملاء/التراكيب)
+  const writtenApplications = { title: "التطبيقات الكتابية", icon: "🗂️", color: "#B08D51", bg: "#f5efe3" }
+
   return (
     <main dir="rtl" style={{minHeight:"100vh",background:"#f0f9ff",fontFamily:"Arial"}}>
       <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.1)"}}>
@@ -40,7 +44,7 @@ export default function UnitPage() {
         <p style={{color:"#6b7280",textAlign:"center",marginBottom:"40px"}}>
           اختر الدرس الذي تريد تعلمه
         </p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"20px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"20px"}}>
           {lessons.map(lesson => (
             <a key={lesson.id} href={`/levels/primary/${year}/unit/${unit}/lesson/${lesson.id}`} style={{textDecoration:"none"}}>
               <div style={{background:"white",borderRadius:"16px",padding:"24px",boxShadow:"0 4px 12px rgba(0,0,0,0.1)",borderTop:`4px solid ${lesson.color}`,cursor:"pointer",textAlign:"center"}}>
@@ -52,6 +56,22 @@ export default function UnitPage() {
               </div>
             </a>
           ))}
+
+          {/* بطاقة مستقلة: التطبيقات الكتابية (حصة قائمة بذاتها في الجدول الزمني) */}
+          <a href={`/levels/primary/${year}/unit/${unit}/written`} style={{textDecoration:"none"}}>
+            <div style={{
+              background:"white",borderRadius:"16px",padding:"24px",
+              boxShadow:"0 4px 12px rgba(0,0,0,0.1)",
+              border:`2px dashed ${writtenApplications.color}`,
+              cursor:"pointer",textAlign:"center"
+            }}>
+              <div style={{fontSize:"48px",marginBottom:"12px"}}>{writtenApplications.icon}</div>
+              <h3 style={{color:writtenApplications.color,fontSize:"18px",fontWeight:"bold",marginBottom:"8px"}}>{writtenApplications.title}</h3>
+              <div style={{background:writtenApplications.bg,color:writtenApplications.color,padding:"6px 12px",borderRadius:"20px",fontSize:"14px",fontWeight:"bold"}}>
+                ابدأ الحصة
+              </div>
+            </div>
+          </a>
         </div>
       </div>
     </main>

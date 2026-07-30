@@ -14,6 +14,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import TeacherNav from "@/components/TeacherNav";
+import { useTeacherGuard } from "@/lib/useTeacherGuard";
 
 // عميل Supabase (نفس مفاتيح .env.local) — يُستعمل فقط لقراءة
 // فصول الأستاذ والحسابات المسجّلة، لا لكتابة أي بيانات شخصية.
@@ -113,6 +114,7 @@ const ghostBtn: React.CSSProperties = {
 
 // ============================================================
 export default function RosterPage() {
+  const { loading: guardLoading, teacherId } = useTeacherGuard();
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [classes, setClasses] = useState<ClassRow[]>([]);
@@ -131,22 +133,15 @@ export default function RosterPage() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // ----- التحميل الأولي: المستخدم + فصوله -----
+  // ----- التحميل الأولي: فصول الأستاذ (بعد اجتياز الحارس) -----
   useEffect(() => {
+    if (guardLoading || !teacherId) return;
     (async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setErrorMsg("يجب تسجيل الدخول كأستاذ لعرض هذه الصفحة.");
-          setLoading(false);
-          return;
-        }
         const { data, error } = await supabase
           .from("classes")
           .select("id, name, join_code")
-          .eq("teacher_id", user.id)
+          .eq("teacher_id", teacherId)
           .order("created_at", { ascending: true });
         if (error) throw error;
         const rows = (data as ClassRow[]) || [];
@@ -344,7 +339,7 @@ export default function RosterPage() {
   }
 
   // ============================================================
-  if (loading) {
+  if (guardLoading || loading) {
     return (
       <>
         <TeacherNav active="roster" />

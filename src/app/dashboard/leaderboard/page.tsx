@@ -1,53 +1,70 @@
 'use client'
+// ============================================================
+//  لوحة الصدارة — الأستاذ
+//  المكان: src/app/dashboard/teacher/leaderboard/page.tsx
+// ============================================================
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import TeacherNav from '@/components/TeacherNav'
+import { useTeacherGuard } from '@/lib/useTeacherGuard'
 
-export default function LeaderboardPage() {
+type Screen = 'start' | 'levels' | 'result'
+
+export default function TeacherLeaderboardPage() {
+  const { loading: guardLoading, teacherId } = useTeacherGuard()
   const [loading, setLoading] = useState(true)
-  const [ranking, setRanking] = useState<any[]>([])
-  const [myGrade, setMyGrade] = useState('')
-  const [noClass, setNoClass] = useState(false)
-  const [myId, setMyId] = useState('')
+  const [screen, setScreen] = useState<Screen>('start')
+  const [selectedGrade, setSelectedGrade] = useState<string>('')
+
+  const [allRankings, setAllRankings] = useState<{[grade: string]: any[]}>({})
+  const [myGrades, setMyGrades] = useState<Set<string>>(new Set())
+  const [hasAnyStudent, setHasAnyStudent] = useState(false)
   const [weekLabel, setWeekLabel] = useState('')
 
   useEffect(() => {
-    loadLeaderboard()
-  }, [])
+    if (guardLoading || !teacherId) return
+    loadAllLeaderboards()
+  }, [guardLoading, teacherId])
 
   const getWeekStart = () => {
     const now = new Date()
-    const day = now.getDay() // 0=الأحد
-    const diff = day === 0 ? 6 : day - 1 // نعتبر الاثنين بداية الأسبوع
+    const day = now.getDay()
+    const diff = day === 0 ? 6 : day - 1
     const monday = new Date(now)
     monday.setDate(now.getDate() - diff)
     monday.setHours(0, 0, 0, 0)
     return monday
   }
 
-  const loadLeaderboard = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    setMyId(session.user.id)
-
-    const { data: myUser } = await supabase
-      .from('users').select('grade_level, class_id').eq('id', session.user.id).single()
-
-    if (!myUser?.grade_level) { setLoading(false); return }
-    setMyGrade(myUser.grade_level)
-
-    if (!myUser?.class_id) { setNoClass(true); setLoading(false); return }
-
-    // الترتيب محصور في تلاميذ نفس الفصل فقط (خصوصية بين المؤسسات)
-    const { data: gradeUsers } = await supabase
-      .from('users').select('id, name').eq('class_id', myUser.class_id)
-
-    if (!gradeUsers || gradeUsers.length === 0) { setLoading(false); return }
-
+  const loadAllLeaderboards = async () => {
     const weekStart = getWeekStart()
     const monthNames = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر']
     setWeekLabel(`أسبوع ${weekStart.getDate()} ${monthNames[weekStart.getMonth()]}`)
 
-    const userIds = gradeUsers.map(u => u.id)
+    // جلب فصول هذا الأستاذ فقط
+    const { data: myClasses } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('teacher_id', teacherId)
+
+    const classIds = (myClasses || []).map(c => c.id)
+    if (classIds.length === 0) { setLoading(false); return }
+
+    // الترتيب محصور في تلاميذ فصول الأستاذ فقط
+    const { data: allStudents } = await supabase
+      .from('users')
+      .select('id, name, grade_level')
+      .eq('role', 'student')
+      .in('class_id', classIds)
+      .not('grade_level', 'is', null)
+
+    if (!allStudents || allStudents.length === 0) {
+      setLoading(false)
+      return
+    }
+    setHasAnyStudent(true)
+
+    const userIds = allStudents.map(u => u.id)
     const { data: weekPoints } = await supabase
       .from('points')
       .select('user_id, points')
@@ -60,106 +77,200 @@ export default function LeaderboardPage() {
       totals[p.user_id] = (totals[p.user_id] || 0) + p.points
     })
 
-    const rankedList = gradeUsers
-      .map(u => ({ id: u.id, name: u.name, points: totals[u.id] || 0 }))
-      .sort((a, b) => b.points - a.points)
+    const byGrade: {[grade: string]: any[]} = {}
+    const gradesOwned = new Set<string>()
+    for (let g = 1; g <= 6; g++) {
+      const gradeStr = String(g)
+      const studentsInGrade = allStudents
+        .filter(s => s.grade_level === gradeStr)
+        .map(s => ({ id: s.id, name: s.name, points: totals[s.id] || 0 }))
+        .sort((a, b) => b.points - a.points)
+      byGrade[gradeStr] = studentsInGrade
+      if (studentsInGrade.length > 0) gradesOwned.add(gradeStr)
+    }
 
-    setRanking(rankedList)
+    setAllRankings(byGrade)
+    setMyGrades(gradesOwned)
     setLoading(false)
   }
 
   const gradeNames: {[key:string]:string} = {
     "1":"الأولى","2":"الثانية","3":"الثالثة","4":"الرابعة","5":"الخامسة","6":"السادسة"
   }
+  const gradeColors: {[key:string]:string} = {
+    "1":"#2563eb","2":"#16a34a","3":"#9333ea","4":"#ea580c","5":"#0891b2","6":"#be185d"
+  }
 
   const medals = ["🥇", "🥈", "🥉"]
 
-  if (loading) return (
-    <div dir="rtl" style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
-      <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
-    </div>
+  const chooseGrade = (grade: string) => {
+    setSelectedGrade(grade)
+    setScreen('result')
+  }
+
+  const backToLevels = () => {
+    setSelectedGrade('')
+    setScreen('levels')
+  }
+
+  if (guardLoading || loading) return (
+    <>
+      <TeacherNav active="leaderboard" />
+      <div dir="rtl" style={{minHeight:"60vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial"}}>
+        <p style={{fontSize:"20px",color:"#6b7280"}}>جارٍ التحميل...</p>
+      </div>
+    </>
   )
 
+  const isMine = myGrades.has(selectedGrade)
+  const resultStudents = allRankings[selectedGrade] || []
+
   return (
-    <main dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)",fontFamily:"Arial"}}>
-      <nav style={{background:"white",padding:"16px",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-        <h1 style={{color:"#2563eb",fontSize:"22px",fontWeight:"bold",margin:0}}>🏆 لوحة الصدارة</h1>
-        <a href="/dashboard/student" style={{color:"#6b7280",textDecoration:"none",fontWeight:"bold",background:"#f3f4f6",padding:"8px 14px",borderRadius:"8px"}}>
-          رجوع
-        </a>
-      </nav>
+    <>
+      <TeacherNav active="leaderboard" />
+      <main dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)",fontFamily:"Arial"}}>
 
-      <div style={{maxWidth:"700px",margin:"0 auto",padding:"24px"}}>
+        <div style={{maxWidth:"900px",margin:"0 auto",padding:"24px"}}>
 
-        {!myGrade || noClass ? (
-          <div style={{background:"white",borderRadius:"16px",padding:"32px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
-            <div style={{fontSize:"48px",marginBottom:"12px"}}>{noClass ? "🏫" : "⚠️"}</div>
-            <p style={{color:"#6b7280",fontSize:"16px"}}>
-              {noClass
-                ? "لست منضماً إلى فصل بعد. اطلب رمز الفصل من أستاذك ثم انضم من لوحتك لترى صدارة فصلك."
-                : "لم يتم تحديد سنتك الدراسية بعد. يرجى التواصل مع أستاذك."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",borderRadius:"16px",padding:"20px",marginBottom:"20px",textAlign:"center",color:"white"}}>
-              <p style={{fontSize:"18px",fontWeight:"bold",margin:0}}>
-                🏫 صدارة فصلي — السنة {gradeNames[myGrade]} ابتدائي
-              </p>
-              <p style={{fontSize:"13px",opacity:0.9,marginTop:"4px"}}>{weekLabel}</p>
-            </div>
-
-            {ranking.length === 0 ? (
-              <div style={{background:"white",borderRadius:"16px",padding:"32px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
-                <div style={{fontSize:"48px",marginBottom:"12px"}}>📚</div>
-                <p style={{color:"#6b7280",fontSize:"16px"}}>لا يوجد تلاميذ في فصلك بعد</p>
+          {screen === 'start' && (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:"20px"}}>
+              <button
+                onClick={() => setScreen('levels')}
+                style={{
+                  width:"140px", height:"140px", borderRadius:"50%",
+                  background:"linear-gradient(135deg,#f59e0b,#d97706)",
+                  border:"none", cursor:"pointer",
+                  display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                  boxShadow:"0 8px 24px rgba(217,119,6,0.35)",
+                  transition:"transform 0.15s",
+                }}
+                onMouseOver={e => (e.currentTarget.style.transform = "scale(1.05)")}
+                onMouseOut={e => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                <span style={{fontSize:"46px"}}>🏆</span>
+              </button>
+              <div style={{textAlign:"center"}}>
+                <p style={{fontSize:"19px",fontWeight:"bold",color:"#1e293b",margin:0}}>لوحة الصدارة</p>
+                <p style={{fontSize:"14px",color:"#6b7280",marginTop:"6px"}}>اضغط لاختيار المستوى وعرض ترتيب فصلك</p>
               </div>
-            ) : (
-              <div style={{background:"white",borderRadius:"16px",padding:"12px",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
-                {ranking.map((student, i) => {
-                  const isMe = student.id === myId
+            </div>
+          )}
+
+          {screen === 'levels' && (
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"24px"}}>
+                <button onClick={() => setScreen('start')}
+                  style={{background:"#f3f4f6",color:"#6b7280",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontWeight:"bold"}}>
+                  → رجوع
+                </button>
+                <h2 style={{color:"#1e293b",fontSize:"19px",fontWeight:"bold",margin:0}}>اختر المستوى الذي تدرّسه</h2>
+                <span style={{width:"70px"}}></span>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"14px"}}>
+                {["1","2","3","4","5","6"].map(grade => {
+                  const color = gradeColors[grade]
+                  const mine = myGrades.has(grade)
                   return (
-                    <div key={student.id} style={{
-                      display:"flex", alignItems:"center", justifyContent:"space-between",
-                      padding:"16px", marginBottom: i < ranking.length-1 ? "8px" : 0,
-                      borderRadius:"12px",
-                      background: isMe ? "#dbeafe" : (i < 3 ? "#fef9c3" : "#f9fafb"),
-                      border: isMe ? "2px solid #2563eb" : "2px solid transparent"
-                    }}>
-                      <div style={{display:"flex", alignItems:"center", gap:"14px"}}>
-                        <div style={{
-                          width:"36px", height:"36px", borderRadius:"50%",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize: i < 3 ? "24px" : "16px", fontWeight:"bold",
-                          background: i < 3 ? "transparent" : "#e5e7eb",
-                          color: "#374151"
-                        }}>
-                          {i < 3 ? medals[i] : i + 1}
-                        </div>
-                        <div>
-                          <p style={{margin:0, fontWeight:"bold", color:"#1e293b", fontSize:"15px"}}>
-                            {student.name} {isMe && <span style={{color:"#2563eb"}}>(أنت)</span>}
-                          </p>
-                        </div>
-                      </div>
-                      <div style={{
-                        background:"#fef9c3", color:"#ca8a04", padding:"6px 14px",
-                        borderRadius:"20px", fontWeight:"bold", fontSize:"14px"
-                      }}>
-                        ⭐ {student.points}
-                      </div>
-                    </div>
+                    <button
+                      key={grade}
+                      onClick={() => chooseGrade(grade)}
+                      style={{
+                        background:"white", border:`2px solid ${mine ? color : "#e5e7eb"}`,
+                        borderRadius:"14px", padding:"22px 12px", cursor:"pointer",
+                        display:"flex", flexDirection:"column", alignItems:"center", gap:"8px",
+                        boxShadow: mine ? `0 4px 14px ${color}33` : "0 2px 8px rgba(0,0,0,0.05)",
+                        position:"relative",
+                      }}
+                    >
+                      {mine && (
+                        <span style={{position:"absolute", top:"8px", left:"8px", background:color, color:"white", borderRadius:"20px", fontSize:"10px", padding:"2px 8px", fontWeight:"bold"}}>
+                          فصلك
+                        </span>
+                      )}
+                      <span style={{fontSize:"28px"}}>🏫</span>
+                      <span style={{fontWeight:"bold", color:"#1e293b", fontSize:"15px"}}>
+                        السنة {gradeNames[grade]}
+                      </span>
+                    </button>
                   )
                 })}
               </div>
-            )}
 
-            <p style={{textAlign:"center", color:"#9ca3af", fontSize:"12px", marginTop:"16px"}}>
-              تُحسب النقاط بدءاً من يوم الاثنين من كل أسبوع
-            </p>
-          </>
-        )}
-      </div>
-    </main>
+              {!hasAnyStudent && (
+                <div style={{background:"#fffbeb",border:"1px solid #fcd34d",color:"#92400e",padding:"12px 16px",borderRadius:"10px",marginTop:"20px",fontSize:"14px",textAlign:"center"}}>
+                  💡 لا يوجد بعد أي تلميذ منضمّ إلى فصولك، لذا لن تظهر أيّة لوحة كـ"فصلك" حتى ينضمّ أول تلميذ.
+                </div>
+              )}
+            </div>
+          )}
+
+          {screen === 'result' && (
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
+                <button onClick={backToLevels}
+                  style={{background:"#f3f4f6",color:"#6b7280",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontWeight:"bold"}}>
+                  → مستوى آخر
+                </button>
+                <p style={{color:"#6b7280",fontSize:"13px",margin:0}}>{weekLabel}</p>
+              </div>
+
+              {!isMine ? (
+                <div style={{background:"white",borderRadius:"16px",padding:"40px 24px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+                  <div style={{fontSize:"52px",marginBottom:"12px"}}>🚫</div>
+                  <p style={{fontSize:"18px",fontWeight:"bold",color:"#dc2626",margin:0}}>
+                    السنة {gradeNames[selectedGrade]} ليست مستواك
+                  </p>
+                  <p style={{color:"#6b7280",fontSize:"14px",marginTop:"10px"}}>
+                    لا تدرّس هذا المستوى حالياً، أو لم ينضمّ إليه أي تلميذ من فصولك بعد.
+                  </p>
+                  <button onClick={backToLevels}
+                    style={{marginTop:"20px",background:"#2563eb",color:"white",border:"none",padding:"10px 24px",borderRadius:"10px",fontWeight:"bold",cursor:"pointer"}}>
+                    اختيار مستوى آخر
+                  </button>
+                </div>
+              ) : (
+                <div style={{background:"white",borderRadius:"16px",overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+                  <div style={{background:gradeColors[selectedGrade],color:"white",padding:"16px 20px",fontWeight:"bold",fontSize:"17px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>🏫 السنة {gradeNames[selectedGrade]} ابتدائي</span>
+                    <span style={{fontSize:"13px",opacity:0.9}}>{resultStudents.length} تلميذ</span>
+                  </div>
+                  <div style={{padding:"14px"}}>
+                    {resultStudents.length === 0 ? (
+                      <p style={{textAlign:"center", color:"#9ca3af", fontSize:"14px", padding:"24px 0"}}>
+                        لا يوجد تلاميذ في هذا المستوى بعد
+                      </p>
+                    ) : (
+                      resultStudents.map((student, i) => (
+                        <div key={student.id} style={{
+                          display:"flex", alignItems:"center", justifyContent:"space-between",
+                          padding:"12px 10px",
+                          borderBottom: i < resultStudents.length-1 ? "1px solid #f3f4f6" : "none",
+                          background: i < 3 ? "#fef9c3" : "transparent",
+                          borderRadius: i < 3 ? "8px" : "0"
+                        }}>
+                          <div style={{display:"flex", alignItems:"center", gap:"12px"}}>
+                            <span style={{fontSize: i < 3 ? "22px" : "14px", fontWeight:"bold", width:"26px", textAlign:"center"}}>
+                              {i < 3 ? medals[i] : i + 1}
+                            </span>
+                            <span style={{fontSize:"15px", color:"#1e293b", fontWeight: i < 3 ? "bold" : "normal"}}>
+                              {student.name}
+                            </span>
+                          </div>
+                          <span style={{fontSize:"14px", color:"#ca8a04", fontWeight:"bold"}}>
+                            ⭐ {student.points}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </main>
+    </>
   )
 }

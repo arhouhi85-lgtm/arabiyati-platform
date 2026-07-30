@@ -19,9 +19,33 @@ export default function StudentDashboard() {
   const [joinError, setJoinError] = useState('')
   const [joining, setJoining] = useState(false)
 
+  // ---------- الحضور الحيّ ----------
+  const [presence, setPresence] = useState<{status:string; message:string|null; link_path:string|null; updated_at:string} | null>(null)
+
   useEffect(() => {
     loadData()
   }, [])
+
+  // نتحقّق من حضور الأستاذ كل 10 ثوانٍ (بنفس نمط التحديث المستعمل في مجتمع المعرفة)
+  useEffect(() => {
+    if (!classId) return
+    const checkPresence = async () => {
+      const { data } = await supabase
+        .from('class_presence')
+        .select('status, message, link_path, updated_at')
+        .eq('class_id', classId)
+        .maybeSingle()
+      setPresence(data || null)
+    }
+    checkPresence()
+    const interval = setInterval(checkPresence, 10000)
+    return () => clearInterval(interval)
+  }, [classId])
+
+  const PRESENCE_VALID_MINUTES = 30
+  const isPresenceLive = presence?.status === 'online' &&
+    (Date.now() - new Date(presence.updated_at).getTime()) / 60000 < PRESENCE_VALID_MINUTES
+  const [presencePopupOpen, setPresencePopupOpen] = useState(false)
 
   const loadData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -192,6 +216,9 @@ export default function StudentDashboard() {
           <a href="/levels/primary" style={{background:"#dbeafe",color:"#2563eb",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             الدروس
           </a>
+          <a href="/dashboard/student/games" style={{background:"#f5efe3",color:"#B08D51",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
+            🎮 ألعابي التربوية
+          </a>
           <a href="/" style={{background:"#fee2e2",color:"#ef4444",padding:"8px 16px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold"}}>
             خروج
           </a>
@@ -225,6 +252,46 @@ export default function StudentDashboard() {
             </>
           )}
         </div>
+
+        {/* أداة الحضور الحيّ — عائمة على أقصى اليسار، لا تزاحم المحتوى */}
+        {isPresenceLive && (
+          <div style={{position:"fixed", left:"14px", top:"50%", transform:"translateY(-50%)", zIndex:200}}>
+            <button
+              onClick={()=>setPresencePopupOpen(v=>!v)}
+              aria-label="أستاذك متصل الآن"
+              style={{
+                width:"46px", height:"46px", borderRadius:"50%", border:"none", cursor:"pointer",
+                background:"linear-gradient(135deg,#16a34a,#15803d)",
+                boxShadow:"0 4px 14px rgba(22,163,74,0.45)",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                position:"relative"
+              }}>
+              <span style={{fontSize:"20px"}}>🟢</span>
+              <span style={{
+                position:"absolute", top:"-2px", right:"-2px", width:"12px", height:"12px",
+                borderRadius:"50%", background:"#4ade80", border:"2px solid white",
+                animation:"presencePulse 1.6s infinite"
+              }}/>
+            </button>
+            <style>{`@keyframes presencePulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,0.6)}70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}`}</style>
+
+            {presencePopupOpen && (
+              <div style={{
+                position:"absolute", left:"56px", top:"50%", transform:"translateY(-50%)",
+                background:"white", borderRadius:"12px", padding:"14px 16px", width:"220px",
+                boxShadow:"0 6px 20px rgba(0,0,0,0.15)", border:"1px solid #dcfce7"
+              }}>
+                <p style={{margin:0,fontWeight:"bold",color:"#166534",fontSize:"14px"}}>🟢 أستاذك متصل الآن!</p>
+                {presence?.message && <p style={{margin:"6px 0 0",fontSize:"13px",color:"#374151"}}>💬 {presence.message}</p>}
+                {presence?.link_path && (
+                  <a href={presence.link_path} style={{display:"block",marginTop:"10px",background:"#16a34a",color:"white",padding:"7px 12px",borderRadius:"8px",textDecoration:"none",fontWeight:"bold",fontSize:"13px",textAlign:"center"}}>
+                    توجّه الآن ←
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {(() => {
           const upcoming = getUpcomingEvents(new Date(), 1)

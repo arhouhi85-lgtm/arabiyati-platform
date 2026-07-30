@@ -4,6 +4,23 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { BRAND, GRADIENTS } from '@/lib/brand'
 
+// ترجمة رسائل الأخطاء الشائعة من Supabase إلى عربية مفهومة،
+// بدل عرض النص الإنجليزي الخام للمستخدم.
+function translateAuthError(message: string): string {
+  const m = message.toLowerCase()
+  if (m.includes('already registered') || m.includes('already exists') || m.includes('user already'))
+    return 'هذا البريد الإلكتروني مسجَّل مسبقاً — استعمل «تسجيل الدخول» أو «نسيت كلمة المرور»'
+  if (m.includes('password should be at least') || m.includes('password') && m.includes('6'))
+    return 'كلمة المرور قصيرة جداً — يجب ألّا تقل عن 6 أحرف'
+  if (m.includes('invalid email') || m.includes('unable to validate email'))
+    return 'صيغة البريد الإلكتروني غير صحيحة'
+  if (m.includes('rate limit') || m.includes('too many'))
+    return 'محاولات كثيرة جداً في وقت قصير — انتظر لحظات وحاول مجدداً'
+  if (m.includes('network') || m.includes('fetch'))
+    return 'تعذّر الاتصال بالخادم — تحقّق من اتصالك بالإنترنت وحاول مجدداً'
+  return 'حدث خطأ في إنشاء الحساب — حاول مجدداً بعد لحظات'
+}
+
 export default function SignupPage() {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -19,12 +36,26 @@ export default function SignupPage() {
     setLoading(true)
     setError('')
 
+    // ---------- تحقّقات أولية قبل أي اتصال بالخادم ----------
+    if (!name.trim()) {
+      setError('الرجاء إدخال الاسم الكامل')
+      setLoading(false)
+      return
+    }
+    if (!email.trim()) {
+      setError('الرجاء إدخال البريد الإلكتروني')
+      setLoading(false)
+      return
+    }
+    if (password.length < 6) {
+      setError('كلمة المرور قصيرة جداً — يجب ألّا تقل عن 6 أحرف')
+      setLoading(false)
+      return
+    }
+
+    // ---------- التحقّق من رمز الفصل (إن أدخله التلميذ) ----------
     let classId = null
     if (role === 'student' && classCode.trim()) {
-      // ⚠️ لا نقرأ من جدول classes مباشرة، لأن سياسات RLS تمنع
-      // أي شخص غير مسجَّل الدخول من رؤية أي فصل (حتى لو كان
-      // الرمز صحيحاً). بدل ذلك نستدعي دالة آمنة (security definer)
-      // مهمتها الوحيدة إيجاد الفصل من رمزه دون كشف أي بيانات أخرى.
       const { data: foundClassId, error: rpcError } = await supabase
         .rpc('find_class_by_code', { code: classCode.trim() })
 
@@ -36,36 +67,49 @@ export default function SignupPage() {
       classId = foundClassId[0].class_id
     }
 
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    // ---------- إنشاء حساب المصادقة ----------
+    const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
 
-    if (error) {
-      setError('حدث خطأ في إنشاء الحساب: ' + (error.message || ''))
+    // الحالة ١: خطأ صريح من Supabase (يشمل غالباً البريد المكرّر أيضاً
+    // في بعض إعدادات المشروع)
+    if (signUpError) {
+      setError(translateAuthError(signUpError.message || ''))
       setLoading(false)
       return
     }
 
-    // كشف البريد المسجل مسبقاً (Supabase لا يرجع خطأ بل مستخدماً وهمياً بلا هويات)
-    if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+    // الحالة ٢: لا خطأ صريح، لكن لم يُرجَع أي مستخدم إطلاقاً — هذا
+    // يحدث في بعض إعدادات Supabase تحديداً مع البريد المكرّر، ولا
+    // يجوز المتابعة هنا مهما كان السبب (كان هذا هو العطل الفعلي
+    // الذي كان يُكمل التسجيل بصمت رغم الفشل).
+    if (!data.user) {
+      setError('تعذّر إنشاء الحساب. إن كان لديك حساب بهذا البريد، استعمل «تسجيل الدخول»، وإلا حاول مجدداً بعد لحظات')
+      setLoading(false)
+      return
+    }
+
+    // الحالة ٣: مستخدم "وهمي" بلا هويات — العلامة القياسية للبريد
+    // المكرّر في Supabase حين تكون حماية سرد البريد مفعَّلة
+    if (!data.user.identities || data.user.identities.length === 0) {
       setError('هذا البريد الإلكتروني مسجَّل مسبقاً — استعمل «تسجيل الدخول» أو «نسيت كلمة المرور»')
       setLoading(false)
       return
     }
 
-    if (data.user) {
-      const { error: profileError } = await supabase.from('users').insert({
-        id: data.user.id,
-        name: name,
-        role: role,
-        grade_level: role === 'student' ? gradeLevel : null,
-        class_id: classId
-      })
-      // لا نتابع أبداً إن فشل حفظ الملف الشخصي (حتى لا يبقى حساب بلا دور)
-      if (profileError) {
-        setError('تعذر إكمال إنشاء الحساب، حاول مجدداً بعد لحظات')
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
+    // ---------- حفظ الملف الشخصي (الاسم/الدور/الفصل) ----------
+    const { error: profileError } = await supabase.from('users').insert({
+      id: data.user.id,
+      name: name,
+      role: role,
+      grade_level: role === 'student' ? gradeLevel : null,
+      class_id: classId
+    })
+    // لا نتابع أبداً إن فشل حفظ الملف الشخصي (حتى لا يبقى حساب بلا دور)
+    if (profileError) {
+      setError('تعذر إكمال إنشاء الحساب، حاول مجدداً بعد لحظات')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
     }
 
     setLoading(false)
@@ -119,7 +163,7 @@ export default function SignupPage() {
 
         <input
           type="password"
-          placeholder="كلمة المرور"
+          placeholder="كلمة المرور (6 أحرف على الأقل)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={{width:"100%",padding:"12px",borderRadius:"8px",border:"2px solid #e5e7eb",marginBottom:"12px",fontSize:"16px",boxSizing:"border-box"}}
